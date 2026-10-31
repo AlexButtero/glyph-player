@@ -11,12 +11,19 @@ import kotlinx.coroutines.flow.Flow
 interface TrackDao {
     @Query("SELECT * FROM tracks ORDER BY title")
     fun observeAll(): Flow<List<Track>>
+    
+    @Query("SELECT * FROM tracks")
+    suspend fun all(): List<Track>
+    
     @Upsert
     suspend fun upsert(list: List<Track>)
+    
     @Query("DELETE FROM tracks")
     suspend fun clear()
+    
     @Query("DELETE FROM tracks WHERE id = :id")
     suspend fun deleteById(id: Long)
+    
     @Query("UPDATE tracks SET title = :newTitle WHERE id = :id")
     suspend fun updateTitle(id: Long, newTitle: String)
 }
@@ -39,6 +46,7 @@ interface PlaylistDao {
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addTracks(items: List<PlaylistTrack>)
+    
     @Query("""SELECT t.* FROM tracks t
               INNER JOIN playlist_tracks pt ON t.id = pt.trackId
               WHERE pt.playlistId = :id ORDER BY pt.position""")
