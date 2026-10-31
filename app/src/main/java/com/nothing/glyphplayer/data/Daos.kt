@@ -31,9 +31,11 @@ interface PlaylistDao {
     @Query("DELETE FROM playlists WHERE id = :id")
     suspend fun delete(id: Long)
     
-    // ДОБАВЛЕНО: Удаление связей треков при удалении плейлиста
     @Query("DELETE FROM playlist_tracks WHERE playlistId = :id")
     suspend fun deletePlaylistTracks(id: Long)
+
+    @Query("UPDATE playlists SET name = :name, description = :desc, posterUri = :poster WHERE id = :id")
+    suspend fun updatePlaylist(id: Long, name: String, desc: String?, poster: String?)
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addTracks(items: List<PlaylistTrack>)
