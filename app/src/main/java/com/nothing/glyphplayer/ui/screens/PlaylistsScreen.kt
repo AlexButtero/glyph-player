@@ -23,12 +23,8 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text(stringResource(R.string.nav_playlists), style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(16.dp))
-        
-        Button(onClick = { showCreate = true }, colors = ButtonDefaults.buttonColors(containerColor = Red), modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.playlists_create))
-        }
+        Button(onClick = { showCreate = true }, colors = ButtonDefaults.buttonColors(containerColor = Red), modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.playlists_create)) }
         Spacer(Modifier.height(16.dp))
-
         LazyColumn(Modifier.fillMaxSize()) {
             items(playlists) { p ->
                 Row(Modifier.fillMaxWidth().clickable { vm.playPlaylist(p.id); onPlaylistClick() }.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -43,18 +39,10 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         AlertDialog(
-            onDismissRequest = { showCreate = false },
-            title = { Text(stringResource(R.string.playlists_new), color = Color.White) },
-            text = {
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.playlists_name), color = Color.Gray) },
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
-            },
+            onDismissRequest = { showCreate = false }, title = { Text(stringResource(R.string.playlists_new), color = Color.White) },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.playlists_name), color = Color.Gray) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) },
             confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { vm.createPlaylist(name); showCreate = false } }) { Text(stringResource(R.string.playlists_create_action), color = Red) } },
-            dismissButton = { TextButton(onClick = { showCreate = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } },
-            containerColor = Color(0xFF121212)
+            dismissButton = { TextButton(onClick = { showCreate = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
 }
