@@ -2,71 +2,55 @@
 <resources>
     <string name="app_name">Glyph Player</string>
 
-    <!-- Navigation -->
-    <string name="nav_home">ГЛАВНАЯ</string>
-    <string name="nav_player">ПЛЕЕР</string>
     <string name="nav_library">БИБЛИОТЕКА</string>
+    <string name="nav_my_wave">МОЯ ВОЛНА</string>
+    <string name="nav_playlists">ПЛЕЙЛИСТЫ</string>
     <string name="nav_settings">НАСТРОЙКИ</string>
 
-    <!-- Home -->
-    <string name="home_subtitle">офлайн • в стиле Nothing OS</string>
-    <plurals name="home_track_count">
-        <item quantity="one">%d трек в библиотеке</item>
-        <item quantity="few">%d трека в библиотеке</item>
-        <item quantity="many">%d треков в библиотеке</item>
-        <item quantity="other">%d треков в библиотеке</item>
-    </plurals>
-    <string name="home_scan">СКАНИРОВАТЬ БИБЛИОТЕКУ</string>
-    <string name="home_my_wave">МОЯ ВОЛНА ▶</string>
-    <string name="home_prompt_hint">грустное / спорт / чилл / дождь</string>
-    <string name="home_prompt_label">ЗАПРОС</string>
-    <string name="home_build_playlist">СОЗДАТЬ ПЛЕЙЛИСТ</string>
-    <plurals name="home_found">
-        <item quantity="one">Найден: %d трек</item>
-        <item quantity="few">Найдено: %d трека</item>
-        <item quantity="many">Найдено: %d треков</item>
-        <item quantity="other">Найдено: %d треков</item>
-    </plurals>
-
-    <!-- Library -->
-    <string name="lib_tracks">ТРЕКИ</string>
-    <string name="lib_playlists">ПЛЕЙЛИСТЫ</string>
+    <string name="lib_shuffle">Перемешать</string>
+    <string name="lib_sort">Сортировать</string>
+    <string name="lib_sort_date_newest">По дате (сначала новые)</string>
+    <string name="lib_sort_default">По умолчанию</string>
+    <string name="lib_sort_title">По названию</string>
+    <string name="lib_sort_artist">По исполнителю</string>
     <string name="lib_search_hint">поиск…</string>
-    <string name="lib_create_playlist">СОЗДАТЬ ПЛЕЙЛИСТ</string>
-    <string name="lib_delete">УДАЛИТЬ</string>
-    <string name="lib_new_playlist">Новый плейлист</string>
-    <string name="lib_name">Название</string>
-    <string name="lib_create">СОЗДАТЬ</string>
+    <string name="lib_selected">Выбрано: %d</string>
+    <string name="lib_add_to_playlist">В плейлист</string>
     <string name="lib_cancel">ОТМЕНА</string>
-    <string name="lib_add_to">Добавить в…</string>
 
-    <!-- Player -->
+    <string name="playlists_create">СОЗДАТЬ ПЛЕЙЛИСТ</string>
+    <string name="playlists_new">Новый плейлист</string>
+    <string name="playlists_name">Название</string>
+    <string name="playlists_create_action">СОЗДАТЬ</string>
+    <string name="playlists_delete">УДАЛИТЬ</string>
+    <string name="playlists_add_to">Добавить в…</string>
+
+    <string name="my_wave_title">МОЯ ВОЛНА</string>
+    <string name="my_wave_subtitle">Бесконечный поток треков, основанный на ваших предпочтениях.</string>
+    <string name="my_wave_start">ЗАПУСТИТЬ ВОЛНУ ▶</string>
+
     <string name="player_equalizer">ЭКВАЛАЙЗЕР</string>
-    <string name="player_sleep">СОН</string>
-    <string name="player_sleep_remaining">СОН %dм</string>
-    <string name="player_speed">СКОРОСТЬ</string>
     <string name="player_lyrics">ТЕКСТ</string>
-    <string name="player_band">Полоса %d</string>
-    <string name="player_eq_unavailable">Эквалайзер недоступен на этом устройстве</string>
+    <string name="player_speed">Скорость</string>
+    <string name="player_speed_title">Скорость воспроизведения</string>
     <string name="player_close">ЗАКРЫТЬ</string>
-    <string name="player_sleep_timer">ТАЙМЕР СНА</string>
-    <string name="player_off">ВЫКЛ</string>
-    <string name="player_minutes">%d мин</string>
+    <string name="player_eq_unavailable">Эквалайзер недоступен</string>
+    <string name="player_band">Полоса %d</string>
 
-    <!-- Settings -->
     <string name="settings_title">НАСТРОЙКИ</string>
     <string name="settings_library">БИБЛИОТЕКА</string>
     <string name="settings_rescan">ПЕРЕСКАНИРОВАТЬ</string>
     <string name="settings_audio">ЗВУК</string>
     <string name="settings_equalizer">Эквалайзер</string>
+    <string name="settings_sleep">Таймер сна</string>
+    <string name="settings_sleep_off">Выключен</string>
+    <string name="settings_sleep_minutes">%d мин</string>
     <string name="settings_language">Язык</string>
     <string name="settings_about">О ПРИЛОЖЕНИИ</string>
-    <string name="settings_version">Glyph Player 1.1.0</string>
-    <string name="settings_subtitle">В стиле Nothing OS • полностью офлайн</string>
+    <string name="settings_version">Glyph Player 1.2.0</string>
+    <string name="settings_subtitle">Nothing OS style • fully offline</string>
 
-    <!-- Language -->
     <string name="lang_system">Системный</string>
     <string name="lang_english">Английский</string>
     <string name="lang_russian">Русский</string>
-    <string name="lang_cancel">ОТМЕНА</string>
 </resources>
