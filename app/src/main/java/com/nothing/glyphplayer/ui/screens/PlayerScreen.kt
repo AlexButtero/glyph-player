@@ -127,7 +127,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             }
         }
 
-        // Кастомный таймер в плеере
         if (pendingDeleteTrack != null) {
             DeletionTimerSnackbar(
                 track = pendingDeleteTrack!!,
@@ -194,4 +193,106 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     }
 }
 
-// (Функции LyricsScreen, QueueScreen, SpeedDialog, EqDialog, formatLyrics, fmt остаются без изменений из предыдущего кода)
+@Composable
+fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var manualText by remember { mutableStateOf("") }
+    var isEditing by remember { mutableStateOf(false) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val lyrics = vm.lyrics.collectAsState().value
+
+    LaunchedEffect(trackId) { trackId?.let { id -> vm.getSavedLyrics(id) { saved -> if (!saved.isNullOrBlank()) manualText = saved } } }
+
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { val text = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { r -> r.readText() }; if (text != null) { manualText = text; isEditing = true } }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+        detectDragGestures(onDragEnd = { if (dragOffsetY > 150f && !isEditing) onBack(); dragOffsetY = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetY += dragAmount.y })
+    }) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
+                if (trackId != null) {
+                    if (!isEditing) TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
+                    else TextButton(onClick = { vm.saveLyrics(trackId, formatLyrics(manualText)); isEditing = false }) { Text(stringResource(R.string.lyrics_save), color = Red) }
+                }
+            }
+            
+            if (isEditing) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    TextButton(onClick = { val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager; val clip = clipboard.primaryClip; if (clip != null && clip.itemCount > 0) manualText = clip.getItemAt(0).text.toString() }) { Text(stringResource(R.string.lyrics_paste), color = Color.Gray) }
+                    TextButton(onClick = { filePicker.launch("text/*") }) { Text(stringResource(R.string.lyrics_import_file), color = Color.Gray) }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(value = manualText, onValueChange = { manualText = it }, modifier = Modifier.fillMaxSize(), placeholder = { Text(stringResource(R.string.lyrics_hint), color = Color.Gray) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White))
+            } else {
+                val formattedText = if (manualText.isNotBlank()) formatLyrics(manualText) else ""
+                if (formattedText.isNotBlank()) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 16.dp)) { Text(formattedText, color = Color.White, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.5f) }
+                } else if (lyrics.isNotEmpty()) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) { lyrics.forEach { line -> val active = line.timeMs <= currentPos && (lyrics.getOrNull(lyrics.indexOf(line) + 1)?.timeMs ?: Long.MAX_VALUE) > currentPos; Text(line.text, color = if (active) Red else Color.Gray, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), textAlign = TextAlign.Center) } }
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.lyrics_no_text), color = Color.Gray) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+        detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
+    }) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } }
+            Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
+            Spacer(Modifier.height(16.dp))
+            LazyColumn(Modifier.fillMaxSize()) {
+                itemsIndexed(queue) { idx, item ->
+                    val isCurrent = idx == currentIndex
+                    Row(Modifier.fillMaxWidth().clickable { onSelect(idx) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.mediaMetadata.title?.toString() ?: "Unknown", color = if (isCurrent) Red else Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text(item.mediaMetadata.artist?.toString() ?: "", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (isCurrent) Text(stringResource(R.string.queue_now_playing), color = Red, style = MaterialTheme.typography.labelSmall)
+                    }
+                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeedDialog(currentSpeed: Float, onSpeedSelected: (Float) -> Unit, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose, title = { Text(stringResource(R.string.player_speed_title), color = Color.White) },
+        text = { Column { listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { sp -> TextButton(onClick = { onSpeedSelected(sp) }, modifier = Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${sp}x", color = if (currentSpeed == sp) Red else Color.White); if (currentSpeed == sp) Text("✓", color = Red) } } } } },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
+    )
+}
+
+@Composable
+private fun EqDialog(onClose: () -> Unit) {
+    val bands = EqualizerManager.bandCount()
+    val range = EqualizerManager.bandLevelRange()
+    var levels by remember { mutableStateOf(List(bands) { EqualizerManager.getBandLevel(it.toShort()).toFloat() }) }
+    AlertDialog(
+        onDismissRequest = onClose, title = { Text(stringResource(R.string.player_equalizer), color = Color.White) },
+        text = { Column { if (bands == 0) Text(stringResource(R.string.player_eq_unavailable), color = Color.Gray) else levels.forEachIndexed { i, lv -> Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); Slider(value = lv, onValueChange = { levels = levels.toMutableList().also { l -> l[i] = it }; EqualizerManager.setBandLevel(i.toShort(), it.toInt().toShort()) }, valueRange = range.first.toFloat()..range.second.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)) } } },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
+    )
+}
+
+private fun formatLyrics(text: String): String {
+    return text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("[") && !it.endsWith("]") }.joinToString("\n\n")
+}
+
+private fun fmt(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
+}
