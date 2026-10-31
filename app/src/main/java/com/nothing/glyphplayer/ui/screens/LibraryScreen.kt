@@ -27,8 +27,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
@@ -44,7 +46,10 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
 
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = tab, containerColor = Color.Black, contentColor = Red) {
-            listOf("TRACKS", "PLAYLISTS").forEachIndexed { i, label ->
+            listOf(
+                stringResource(R.string.lib_tracks),
+                stringResource(R.string.lib_playlists)
+            ).forEachIndexed { i, label ->
                 Tab(
                     selected = tab == i,
                     onClick = { tab = i },
@@ -57,7 +62,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
-                placeholder = { Text("search…", color = Color.Gray) },
+                placeholder = { Text(stringResource(R.string.lib_search_hint), color = Color.Gray) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Red,
@@ -97,7 +102,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
                 onClick = { showCreate = true },
                 colors = ButtonDefaults.buttonColors(containerColor = Red),
                 modifier = Modifier.fillMaxWidth().padding(8.dp)
-            ) { Text("CREATE PLAYLIST") }
+            ) { Text(stringResource(R.string.lib_create_playlist)) }
 
             LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(playlists) { _, p ->
@@ -108,7 +113,8 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
                             Text(p.name, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         }
                         TextButton(onClick = { vm.deletePlaylist(p.id) }) {
-                            Text("DELETE", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.lib_delete),
+                                color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
@@ -121,12 +127,12 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
         var name by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showCreate = false },
-            title = { Text("New playlist", color = Color.White) },
+            title = { Text(stringResource(R.string.lib_new_playlist), color = Color.White) },
             text = {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name", color = Color.Gray) },
+                    label = { Text(stringResource(R.string.lib_name), color = Color.Gray) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Red,
                         unfocusedBorderColor = Color.DarkGray,
@@ -138,10 +144,12 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
             confirmButton = {
                 TextButton(onClick = {
                     if (name.isNotBlank()) { vm.createPlaylist(name); showCreate = false }
-                }) { Text("CREATE", color = Red) }
+                }) { Text(stringResource(R.string.lib_create), color = Red) }
             },
             dismissButton = {
-                TextButton(onClick = { showCreate = false }) { Text("CANCEL", color = Color.Gray) }
+                TextButton(onClick = { showCreate = false }) {
+                    Text(stringResource(R.string.lib_cancel), color = Color.Gray)
+                }
             },
             containerColor = Color(0xFF121212)
         )
@@ -151,7 +159,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
     if (trackToAdd != null && playlists.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showAddTrack = null },
-            title = { Text("Add to…", color = Color.White) },
+            title = { Text(stringResource(R.string.lib_add_to), color = Color.White) },
             text = {
                 Column {
                     playlists.forEach { p ->
@@ -164,7 +172,9 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel()) {
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showAddTrack = null }) { Text("CANCEL", color = Color.Gray) }
+                TextButton(onClick = { showAddTrack = null }) {
+                    Text(stringResource(R.string.lib_cancel), color = Color.Gray)
+                }
             },
             containerColor = Color(0xFF121212)
         )
