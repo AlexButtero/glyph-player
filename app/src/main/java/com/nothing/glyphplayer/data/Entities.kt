@@ -13,7 +13,8 @@ data class Track(
     val uri: String,
     val genre: String? = null,
     val bpm: Int? = null,
-    val artUri: String? = null
+    val artUri: String? = null,
+    val dateAdded: Long = 0
 )
 
 @Entity(tableName = "playlists")
