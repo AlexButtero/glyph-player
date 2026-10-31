@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -13,7 +14,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -60,7 +61,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     
     var showCreateFromAdd by remember { mutableStateOf(false) }
 
-    // ОПТИМИЗАЦИЯ: remember для фильтрации, чтобы не нагружать CPU при каждом клике
     val filtered = remember(lib, search, sortMode) {
         lib.filter {
             search.isBlank() || it.title.contains(search, true) || it.artist.contains(search, true)
@@ -120,7 +120,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             }
 
             LazyColumn(Modifier.fillMaxSize()) {
-                // ОПТИМИЗАЦИЯ: ключ для плавной работы списка
                 itemsIndexed(filtered, key = { _, track -> track.id }) { idx, track ->
                     val isSelected = selectedTracks.contains(track.id)
                     Row(
@@ -147,7 +146,13 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
                                 )
                             } else {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray)
+                                // ИСПОЛЬЗУЕМ НАШУ ИКОНКУ
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_fallback_music),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                         }
                         
@@ -192,11 +197,10 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
 
     if (showAddToPlaylist) {
         if (showCreateFromAdd) {
-            // ИСПОЛЬЗУЕМ НОВЫЙ ДИАЛОГ
             PlaylistEditorDialog(
                 initialName = "",
                 onSave = { name, desc, poster ->
-                    val tracksToAdd = selectedTracks.toList() // ФИКС БАГА: Сохраняем список до очистки
+                    val tracksToAdd = selectedTracks.toList()
                     vm.createPlaylist(name, desc, poster) { newId ->
                         vm.addMultipleToPlaylist(newId, tracksToAdd)
                     }
