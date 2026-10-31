@@ -1,7 +1,5 @@
 package com.nothing.glyphplayer.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -89,7 +87,8 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                 
                 Spacer(Modifier.height(16.dp))
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(playlistTracks) { track ->
+                    // ОПТИМИЗАЦИЯ: ключ
+                    items(playlistTracks, key = { it.id }) { track ->
                         Row(Modifier.fillMaxWidth().clickable { 
                             vm.playTracks(playlistTracks, playlistTracks.indexOf(track))
                             onPlaylistClick() 
@@ -117,7 +116,8 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
             Spacer(Modifier.height(16.dp))
             
             LazyColumn(Modifier.fillMaxSize()) {
-                items(playlists) { p ->
+                // ОПТИМИЗАЦИЯ: ключ
+                items(playlists, key = { it.id }) { p ->
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
                             if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -181,57 +181,28 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
         )
     }
 
-    playlistToEdit?.let { p ->
-        var editName by remember { mutableStateOf(p.name) }
-        var editDesc by remember { mutableStateOf(p.description ?: "") }
-        var editPoster by remember { mutableStateOf(p.posterUri) }
-        
-        val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            if (uri != null) editPoster = uri.toString()
-        }
-
-        AlertDialog(
-            onDismissRequest = { playlistToEdit = null },
-            title = { Text("Редактировать", color = Color.White) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = editName, onValueChange = { editName = it },
-                        label = { Text("Название") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = editDesc, onValueChange = { editDesc = it },
-                        label = { Text("Описание") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray)
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Выбрать постер")
-                    }
-                }
+    if (playlistToEdit != null) {
+        // ИСПОЛЬЗУЕМ ОБЩИЙ ДИАЛОГ
+        PlaylistEditorDialog(
+            initialName = playlistToEdit!!.name,
+            initialDesc = playlistToEdit!!.description ?: "",
+            initialPoster = playlistToEdit!!.posterUri,
+            onSave = { name, desc, poster ->
+                vm.updatePlaylist(playlistToEdit!!.id, name, desc, poster)
+                playlistToEdit = null
             },
-            confirmButton = { 
-                TextButton(onClick = { 
-                    if (editName.isNotBlank()) {
-                        vm.updatePlaylist(p.id, editName, editDesc.ifBlank { null }, editPoster)
-                    }
-                    playlistToEdit = null 
-                }) { Text("СОХРАНИТЬ", color = Red) } 
-            },
-            dismissButton = { TextButton(onClick = { playlistToEdit = null }) { Text("ОТМЕНА", color = Color.Gray) } },
-            containerColor = Color(0xFF121212)
+            onDismiss = { playlistToEdit = null }
         )
     }
 
     if (showCreate) {
-        var name by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showCreate = false }, title = { Text(stringResource(R.string.playlists_new), color = Color.White) },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.playlists_name), color = Color.Gray) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) },
-            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { vm.createPlaylist(name); showCreate = false } }) { Text(stringResource(R.string.playlists_create_action), color = Red) } },
-            dismissButton = { TextButton(onClick = { showCreate = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+        // ИСПОЛЬЗУЕМ ОБЩИЙ ДИАЛОГ
+        PlaylistEditorDialog(
+            onSave = { name, desc, poster ->
+                vm.createPlaylist(name, desc, poster)
+                showCreate = false
+            },
+            onDismiss = { showCreate = false }
         )
     }
 }
