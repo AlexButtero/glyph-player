@@ -215,9 +215,9 @@ fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Un
                         if (dragOffsetY > 50f) onDelete()
                         dragOffsetY = 0f
                     },
-                    onVerticalDrag = { change, dragAmount -> // ИСПРАВЛЕНО: onVerticalDrag вместо onDrag
+                    onVerticalDrag = { change, dragAmount -> // dragAmount это Float
                         change.consume()
-                        dragOffsetY += dragAmount.y
+                        dragOffsetY += dragAmount // ИСПРАВЛЕНО
                     }
                 )
             },
