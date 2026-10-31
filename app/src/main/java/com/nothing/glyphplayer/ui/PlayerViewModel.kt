@@ -17,7 +17,6 @@ import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.playback.LyricLine
 import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.playback.PlayerService
-import com.nothing.glyphplayer.smart.MyWave
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -40,7 +39,9 @@ data class PlaybackState(
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val speed: Float = 1f,
-    val sleepSecondsRemaining: Int? = null
+    val sleepSecondsRemaining: Int? = null,
+    val queue: List<MediaItem> = emptyList(),
+    val currentIndex: Int = 0
 )
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -82,13 +83,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun refresh() {
         val c = controller ?: return
         val item = c.currentMediaItem
+        
+        val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
+        
         _state.value = _state.value.copy(
             isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
             title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
             artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
             positionMs = c.currentPosition.coerceAtLeast(0), shuffle = c.shuffleModeEnabled,
-            repeatMode = c.repeatMode, speed = c.playbackParameters.speed
+            repeatMode = c.repeatMode, speed = c.playbackParameters.speed,
+            queue = q, currentIndex = c.currentMediaItemIndex
         )
+        
         val newId = _state.value.currentTrackId
         if (newId != null && newId != currentLyricsTrackId) {
             currentLyricsTrackId = newId
@@ -128,6 +134,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun next() { controller?.seekToNextMediaItem() }
     fun prev() { controller?.seekToPreviousMediaItem() }
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
+    fun seekToIndex(index: Int) { controller?.seekToDefaultPosition(index); controller?.play() }
+    
     fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
     fun cycleRepeat() {
         controller?.let {
@@ -163,18 +171,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun addToQueue(tracks: List<Track>) {
+        val c = controller ?: return
+        c.addMediaItems(tracks.map { it.toMediaItem() })
+    }
+
+    fun playNext(tracks: List<Track>) {
+        val c = controller ?: return
+        val current = c.currentMediaItemIndex
+        c.insertMediaItems(current + 1, tracks.map { it.toMediaItem() })
+    }
+
     fun shuffleAll() {
         val lib = library.value
         if (lib.isEmpty()) return
         playTracks(lib.shuffled(), 0)
-    }
-
-    fun queueMyWave() {
-        val lib = library.value
-        if (lib.isEmpty()) return
-        val current = _state.value.currentTrackId?.let { id -> lib.find { it.id == id } }
-        val next = MyWave.next(current, lib, emptySet()) ?: return
-        playTracks(lib, lib.indexOf(next))
     }
 
     fun scanLibrary(onDone: (Int) -> Unit) {
@@ -199,6 +210,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val tracks = repo.tracksOf(playlistId)
             if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0) }
         }
+    }
+
+    fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) {
+        scope.launch { withContext(Dispatchers.Main) { onResult(repo.getLyrics(trackId)) } }
+    }
+
+    fun saveLyrics(trackId: Long, text: String) {
+        scope.launch { repo.saveLyrics(trackId, text) }
     }
 
     override fun onCleared() {
