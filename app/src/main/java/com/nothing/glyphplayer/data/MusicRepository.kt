@@ -1,10 +1,15 @@
 package com.nothing.glyphplayer.data
 
+import android.content.Context
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 
 class MusicRepository(
     private val db: AppDatabase,
-    private val scanner: MediaStoreScanner
+    private val scanner: MediaStoreScanner,
+    private val context: Context
 ) {
     val tracks: Flow<List<Track>> = db.tracks().observeAll()
     val playlists: Flow<List<Playlist>> = db.playlists().observeAll()
@@ -14,6 +19,19 @@ class MusicRepository(
         db.tracks().clear()
         db.tracks().upsert(found)
         return found.size
+    }
+
+    suspend fun deleteTrack(track: Track) {
+        withContext(Dispatchers.IO) {
+            try {
+                context.contentResolver.delete(Uri.parse(track.uri), null, null)
+            } catch (_: Exception) { }
+        }
+        db.tracks().deleteById(track.id)
+    }
+
+    suspend fun renameTrack(id: Long, newTitle: String) {
+        db.tracks().updateTitle(id, newTitle)
     }
 
     suspend fun createPlaylist(name: String): Long =
