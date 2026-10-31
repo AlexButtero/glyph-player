@@ -3,7 +3,7 @@
     <string name="app_name">Glyph Player</string>
 
     <string name="nav_library">LIBRARY</string>
-    <string name="nav_my_wave">MY WAVE</string>
+    <string name="nav_artists">ARTISTS</string>
     <string name="nav_playlists">PLAYLISTS</string>
     <string name="nav_settings">SETTINGS</string>
 
@@ -16,7 +16,15 @@
     <string name="lib_search_hint">search…</string>
     <string name="lib_selected">Selected: %d</string>
     <string name="lib_add_to_playlist">To playlist</string>
+    <string name="lib_add_to_queue">To queue</string>
+    <string name="lib_play_next">Play next</string>
     <string name="lib_cancel">CANCEL</string>
+    
+    <!-- Context Menu -->
+    <string name="menu_add_to_playlist">Add to playlist</string>
+    <string name="menu_add_to_queue">Add to queue</string>
+    <string name="menu_play_next">Play next</string>
+    <string name="menu_go_to_artist">Go to artist</string>
 
     <string name="playlists_create">CREATE PLAYLIST</string>
     <string name="playlists_new">New playlist</string>
@@ -25,10 +33,6 @@
     <string name="playlists_delete">DELETE</string>
     <string name="playlists_add_to">Add to…</string>
 
-    <string name="my_wave_title">MY WAVE</string>
-    <string name="my_wave_subtitle">Endless stream of tracks based on your preferences.</string>
-    <string name="my_wave_start">START WAVE ▶</string>
-
     <string name="player_equalizer">EQUALIZER</string>
     <string name="player_lyrics">LYRICS</string>
     <string name="player_speed">Speed</string>
@@ -36,6 +40,19 @@
     <string name="player_close">CLOSE</string>
     <string name="player_eq_unavailable">Equalizer unavailable</string>
     <string name="player_band">Band %d</string>
+    
+    <!-- Lyrics Editor -->
+    <string name="lyrics_title">LYRICS</string>
+    <string name="lyrics_no_text">No lyrics available</string>
+    <string name="lyrics_edit">Edit</string>
+    <string name="lyrics_import_file">Import from file</string>
+    <string name="lyrics_paste">Paste from clipboard</string>
+    <string name="lyrics_save">Save</string>
+    <string name="lyrics_hint">Enter lyrics here…</string>
+
+    <!-- Queue -->
+    <string name="queue_title">QUEUE</string>
+    <string name="queue_now_playing">Now playing</string>
 
     <string name="settings_title">SETTINGS</string>
     <string name="settings_library">LIBRARY</string>
@@ -47,7 +64,7 @@
     <string name="settings_sleep_minutes">%d min</string>
     <string name="settings_language">Language</string>
     <string name="settings_about">ABOUT</string>
-    <string name="settings_version">Glyph Player 1.2.0</string>
+    <string name="settings_version">Glyph Player 1.3.0</string>
     <string name="settings_subtitle">Nothing OS style • fully offline</string>
 
     <string name="lang_system">System default</string>
