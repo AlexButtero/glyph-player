@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Темно-серый фон обложки -->
+    <path android:fillColor="#222222" android:pathData="M0,0h48v48h-48z" />
+    <!-- Черный круг -->
+    <path android:fillColor="#000000" android:pathData="M24,24m-16,0a16,16 0,1 1,32 0a16,16 0,1 1,-32 0" />
+    <!-- Красный треугольник Play -->
+    <path android:fillColor="#D71921" android:pathData="M21,17 L31,24 L21,31 Z" />
+</vector>
