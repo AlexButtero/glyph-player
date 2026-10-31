@@ -31,3 +31,9 @@ data class PlaylistTrack(
     val trackId: Long,
     val position: Int
 )
+
+@Entity(tableName = "lyrics")
+data class LyricsEntity(
+    @PrimaryKey val trackId: Long,
+    val text: String
+)
