@@ -5,23 +5,23 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Черный круг -->
+    <!-- Черный круг (уменьшен и сдвинут чуть выше центра) -->
     <path
         android:fillColor="#000000"
-        android:pathData="M54,54 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
+        android:pathData="M54,46 m-26,0 a26,26 0 1,1 52,0 a26,26 0 1,1 -52,0" />
         
-    <!-- Красный треугольник Play -->
+    <!-- Красный треугольник Play (пропорционально уменьшен) -->
     <path
         android:fillColor="#D71921"
-        android:pathData="M46,36 L72,54 L46,72 Z" />
+        android:pathData="M48,35 L67,46 L48,57 Z" />
         
-    <!-- Черная полоса -->
+    <!-- Черная полоса (поднята, чтобы не обрезалась) -->
     <path
         android:fillColor="#000000"
-        android:pathData="M16,96 L92,96 L92,100 L16,100 Z" />
+        android:pathData="M26,80 L82,80 L82,84 L26,84 Z" />
         
-    <!-- Красная точка -->
+    <!-- Красная точка на полосе -->
     <path
         android:fillColor="#D71921"
-        android:pathData="M26,98 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0" />
+        android:pathData="M34,82 m-4.5,0 a4.5,4.5 0 1,1 9,0 a4.5,4.5 0 1,1 -9,0" />
 </vector>
