@@ -2,67 +2,55 @@
 <resources>
     <string name="app_name">Glyph Player</string>
 
-    <!-- Navigation -->
-    <string name="nav_home">HOME</string>
-    <string name="nav_player">PLAYER</string>
     <string name="nav_library">LIBRARY</string>
+    <string name="nav_my_wave">MY WAVE</string>
+    <string name="nav_playlists">PLAYLISTS</string>
     <string name="nav_settings">SETTINGS</string>
 
-    <!-- Home -->
-    <string name="home_subtitle">offline • nothing os style</string>
-    <plurals name="home_track_count">
-        <item quantity="one">%d track in library</item>
-        <item quantity="other">%d tracks in library</item>
-    </plurals>
-    <string name="home_scan">SCAN LIBRARY</string>
-    <string name="home_my_wave">MY WAVE ▶</string>
-    <string name="home_prompt_hint">sad / workout / chill / rain</string>
-    <string name="home_prompt_label">PROMPT</string>
-    <string name="home_build_playlist">BUILD PLAYLIST</string>
-    <plurals name="home_found">
-        <item quantity="one">Found: %d track</item>
-        <item quantity="other">Found: %d tracks</item>
-    </plurals>
-
-    <!-- Library -->
-    <string name="lib_tracks">TRACKS</string>
-    <string name="lib_playlists">PLAYLISTS</string>
+    <string name="lib_shuffle">Shuffle</string>
+    <string name="lib_sort">Sort</string>
+    <string name="lib_sort_date_newest">By date (newest)</string>
+    <string name="lib_sort_default">Default</string>
+    <string name="lib_sort_title">By title</string>
+    <string name="lib_sort_artist">By artist</string>
     <string name="lib_search_hint">search…</string>
-    <string name="lib_create_playlist">CREATE PLAYLIST</string>
-    <string name="lib_delete">DELETE</string>
-    <string name="lib_new_playlist">New playlist</string>
-    <string name="lib_name">Name</string>
-    <string name="lib_create">CREATE</string>
+    <string name="lib_selected">Selected: %d</string>
+    <string name="lib_add_to_playlist">To playlist</string>
     <string name="lib_cancel">CANCEL</string>
-    <string name="lib_add_to">Add to…</string>
 
-    <!-- Player -->
+    <string name="playlists_create">CREATE PLAYLIST</string>
+    <string name="playlists_new">New playlist</string>
+    <string name="playlists_name">Name</string>
+    <string name="playlists_create_action">CREATE</string>
+    <string name="playlists_delete">DELETE</string>
+    <string name="playlists_add_to">Add to…</string>
+
+    <string name="my_wave_title">MY WAVE</string>
+    <string name="my_wave_subtitle">Endless stream of tracks based on your preferences.</string>
+    <string name="my_wave_start">START WAVE ▶</string>
+
     <string name="player_equalizer">EQUALIZER</string>
-    <string name="player_sleep">SLEEP</string>
-    <string name="player_sleep_remaining">SLEEP %dm</string>
-    <string name="player_speed">SPEED</string>
     <string name="player_lyrics">LYRICS</string>
-    <string name="player_band">Band %d</string>
-    <string name="player_eq_unavailable">Equalizer unavailable on this device</string>
+    <string name="player_speed">Speed</string>
+    <string name="player_speed_title">Playback speed</string>
     <string name="player_close">CLOSE</string>
-    <string name="player_sleep_timer">SLEEP TIMER</string>
-    <string name="player_off">OFF</string>
-    <string name="player_minutes">%d min</string>
+    <string name="player_eq_unavailable">Equalizer unavailable</string>
+    <string name="player_band">Band %d</string>
 
-    <!-- Settings -->
     <string name="settings_title">SETTINGS</string>
     <string name="settings_library">LIBRARY</string>
     <string name="settings_rescan">RESCAN LIBRARY</string>
     <string name="settings_audio">AUDIO</string>
     <string name="settings_equalizer">Equalizer</string>
+    <string name="settings_sleep">Sleep timer</string>
+    <string name="settings_sleep_off">Off</string>
+    <string name="settings_sleep_minutes">%d min</string>
     <string name="settings_language">Language</string>
     <string name="settings_about">ABOUT</string>
-    <string name="settings_version">Glyph Player 1.1.0</string>
+    <string name="settings_version">Glyph Player 1.2.0</string>
     <string name="settings_subtitle">Nothing OS style • fully offline</string>
 
-    <!-- Language -->
     <string name="lang_system">System default</string>
     <string name="lang_english">English</string>
     <string name="lang_russian">Russian</string>
-    <string name="lang_cancel">CANCEL</string>
 </resources>
