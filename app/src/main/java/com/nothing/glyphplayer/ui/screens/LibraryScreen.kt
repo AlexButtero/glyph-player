@@ -61,7 +61,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             if (selectedTracks.isNotEmpty()) {
-                // Лаконичная панель мультивыбора
                 Row(
                     Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
@@ -113,7 +112,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                 onClick = {
                                     if (selectedTracks.isEmpty()) { 
                                         if (state.currentTrackId == track.id) {
-                                            // Если трек уже играет, просто открываем плеер
                                             onTrackClick()
                                         } else {
                                             vm.playTracks(filtered, idx)
@@ -140,10 +138,8 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
                                         showMenuForTrack = null
                                         if (playlists.isEmpty()) {
-                                            // Если плейлистов нет, предлагаем создать
                                             vm.createPlaylist("Мой плейлист") { newId -> vm.addMultipleToPlaylist(newId, listOf(track.id)) }
                                         } else {
-                                            // Иначе показываем диалог
                                             selectedTracks = listOf(track.id)
                                             showAddToPlaylist = true
                                         }
@@ -159,7 +155,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             }
         }
 
-        // Кастомный таймер удаления
         if (pendingDeleteTrack != null) {
             DeletionTimerSnackbar(
                 track = pendingDeleteTrack!!,
@@ -170,7 +165,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         }
     }
 
-    // Диалоги
     if (showAddToPlaylist && playlists.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showAddToPlaylist = false }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
@@ -199,7 +193,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     }
 }
 
-// Компонент кастомного таймера удаления
 @Composable
 fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     var timeLeft by remember { mutableStateOf(6) }
@@ -219,7 +212,8 @@ fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Un
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
-                        if (dragOffsetY > 50f) onCancel()
+                        // ИЗМЕНЕНО: Свайп вниз теперь подтверждает удаление
+                        if (dragOffsetY > 50f) onDelete()
                         dragOffsetY = 0f
                     },
                     onDrag = { change, dragAmount ->
@@ -235,7 +229,10 @@ fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Un
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Удаление: ${track.title}", color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1)
+            Column(Modifier.weight(1f)) {
+                Text("Удаление: ${track.title}", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text("Смахните вниз, чтобы удалить", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            }
             Spacer(Modifier.width(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("$timeLeft сек", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
