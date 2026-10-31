@@ -31,11 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
+import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.playback.EqualizerManager
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
@@ -128,17 +130,22 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel()) {
         Spacer(Modifier.height(12.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton(onClick = { showEq = true }) { Text("EQ", color = Red) }
+            TextButton(onClick = { showEq = true }) {
+                Text(stringResource(R.string.player_equalizer), color = Red)
+            }
             TextButton(onClick = { showSleep = true }) {
+                val remaining = state.sleepSecondsRemaining
                 Text(
-                    state.sleepSecondsRemaining?.let { "SLEEP ${it / 60}м" } ?: "SLEEP",
-                    color = if (state.sleepSecondsRemaining != null) Red else Color.Gray
+                    if (remaining != null) stringResource(R.string.player_sleep_remaining, remaining / 60)
+                    else stringResource(R.string.player_sleep),
+                    color = if (remaining != null) Red else Color.Gray
                 )
             }
         }
 
         Spacer(Modifier.height(8.dp))
-        Text("SPEED", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+        Text(stringResource(R.string.player_speed),
+            color = Color.Gray, style = MaterialTheme.typography.labelSmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { sp ->
                 TextButton(onClick = { vm.setSpeed(sp) }) {
@@ -155,7 +162,8 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel()) {
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.4f))
             Spacer(Modifier.height(12.dp))
-            Text("LYRICS", color = Red, style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.player_lyrics),
+                color = Red, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.height(8.dp))
             lyrics.forEach { line ->
                 val active = line.timeMs <= state.positionMs
@@ -187,14 +195,15 @@ private fun EqDialog(onClose: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("EQUALIZER", color = Color.White) },
+        title = { Text(stringResource(R.string.player_equalizer), color = Color.White) },
         text = {
             Column {
                 if (bands == 0) {
-                    Text("Equalizer недоступен на этом устройстве", color = Color.Gray)
+                    Text(stringResource(R.string.player_eq_unavailable), color = Color.Gray)
                 } else {
                     levels.forEachIndexed { i, lv ->
-                        Text("Band ${i + 1}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.player_band, i + 1),
+                            color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                         Slider(
                             value = lv,
                             onValueChange = {
@@ -208,7 +217,9 @@ private fun EqDialog(onClose: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("CLOSE", color = Red) } },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) }
+        },
         containerColor = Color(0xFF121212)
     )
 }
@@ -217,17 +228,23 @@ private fun EqDialog(onClose: () -> Unit) {
 private fun SleepDialog(vm: PlayerViewModel, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("SLEEP TIMER", color = Color.White) },
+        title = { Text(stringResource(R.string.player_sleep_timer), color = Color.White) },
         text = {
             Column {
                 listOf(0, 15, 30, 45, 60).forEach { m ->
                     TextButton(onClick = { vm.setSleepTimer(m); onClose() }) {
-                        Text(if (m == 0) "OFF" else "$m min", color = Color.White)
+                        Text(
+                            if (m == 0) stringResource(R.string.player_off)
+                            else stringResource(R.string.player_minutes, m),
+                            color = Color.White
+                        )
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("CLOSE", color = Red) } },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) }
+        },
         containerColor = Color(0xFF121212)
     )
 }
