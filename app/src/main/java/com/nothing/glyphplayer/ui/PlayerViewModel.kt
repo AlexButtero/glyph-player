@@ -62,6 +62,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var pollJob: Job? = null
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
+    private var lastBackPressTime = 0L
 
     init { connect() }
 
@@ -83,7 +84,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun refresh() {
         val c = controller ?: return
         val item = c.currentMediaItem
-        
         val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
         
         _state.value = _state.value.copy(
@@ -108,12 +108,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         pollJob = scope.launch {
             while (isActive) {
                 val c = controller ?: break
-                _state.value = _state.value.copy(
-                    positionMs = c.currentPosition.coerceAtLeast(0),
-                    durationMs = c.duration.coerceAtLeast(0)
-                )
+                _state.value = _state.value.copy(positionMs = c.currentPosition.coerceAtLeast(0), durationMs = c.duration.coerceAtLeast(0))
                 delay(500)
             }
+        }
+    }
+
+    fun handleBackButton() {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressTime < 500) {
+            prev()
+            lastBackPressTime = 0L
+        } else {
+            seekTo(0)
+            lastBackPressTime = now
         }
     }
 
@@ -126,11 +134,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         c.play()
     }
 
-    fun playPause() {
-        val c = controller ?: return
-        if (c.isPlaying) c.pause() else c.play()
-    }
-
+    fun playPause() { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
     fun next() { controller?.seekToNextMediaItem() }
     fun prev() { controller?.seekToPreviousMediaItem() }
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
@@ -147,96 +151,38 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setSpeed(speed: Float) {
-        controller?.setPlaybackSpeed(speed)
-        _state.value = _state.value.copy(speed = speed)
-    }
+    fun setSpeed(speed: Float) { controller?.setPlaybackSpeed(speed); _state.value = _state.value.copy(speed = speed) }
 
     fun setSleepTimer(minutes: Int) {
         sleepJob?.cancel()
-        if (minutes <= 0) {
-            _state.value = _state.value.copy(sleepSecondsRemaining = null)
-            return
-        }
+        if (minutes <= 0) { _state.value = _state.value.copy(sleepSecondsRemaining = null); return }
         _state.value = _state.value.copy(sleepSecondsRemaining = minutes * 60)
         sleepJob = scope.launch {
             var remaining = minutes * 60
-            while (remaining > 0) {
-                delay(1000)
-                remaining--
-                _state.value = _state.value.copy(sleepSecondsRemaining = remaining)
-            }
-            controller?.pause()
-            _state.value = _state.value.copy(sleepSecondsRemaining = null)
+            while (remaining > 0) { delay(1000); remaining--; _state.value = _state.value.copy(sleepSecondsRemaining = remaining) }
+            controller?.pause(); _state.value = _state.value.copy(sleepSecondsRemaining = null)
         }
     }
 
-    fun addToQueue(tracks: List<Track>) {
-        val c = controller ?: return
-        c.addMediaItems(tracks.map { it.toMediaItem() })
-    }
+    fun addToQueue(tracks: List<Track>) { controller?.addMediaItems(tracks.map { it.toMediaItem() }) }
+    fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
+    fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
 
-    fun playNext(tracks: List<Track>) {
-        val c = controller ?: return
-        val current = c.currentMediaItemIndex
-        // ИСПРАВЛЕНО: используем addMediaItems с индексом
-        c.addMediaItems(current + 1, tracks.map { it.toMediaItem() })
-    }
-
-    fun shuffleAll() {
-        val lib = library.value
-        if (lib.isEmpty()) return
-        playTracks(lib.shuffled(), 0)
-    }
-
-    fun scanLibrary(onDone: (Int) -> Unit) {
-        scope.launch {
-            val n = repo.scanLibrary()
-            withContext(Dispatchers.Main) { onDone(n) }
-        }
-    }
-
-    fun createPlaylist(name: String, onDone: (Long) -> Unit = {}) {
-        scope.launch {
-            val id = repo.createPlaylist(name)
-            withContext(Dispatchers.Main) { onDone(id) }
-        }
-    }
-
+    fun scanLibrary(onDone: (Int) -> Unit) { scope.launch { val n = repo.scanLibrary(); withContext(Dispatchers.Main) { onDone(n) } } }
+    fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
+    fun renameTrack(id: Long, newTitle: String) { scope.launch { repo.renameTrack(id, newTitle) } }
+    fun createPlaylist(name: String, onDone: (Long) -> Unit = {}) { scope.launch { val id = repo.createPlaylist(name); withContext(Dispatchers.Main) { onDone(id) } } }
     fun deletePlaylist(id: Long) { scope.launch { repo.deletePlaylist(id) } }
     fun addMultipleToPlaylist(playlistId: Long, trackIds: List<Long>) { scope.launch { repo.addToPlaylist(playlistId, trackIds) } }
-    
-    fun playPlaylist(playlistId: Long) {
-        scope.launch {
-            val tracks = repo.tracksOf(playlistId)
-            if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0) }
-        }
-    }
-
-    fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) {
-        scope.launch { withContext(Dispatchers.Main) { onResult(repo.getLyrics(trackId)) } }
-    }
-
-    fun saveLyrics(trackId: Long, text: String) {
-        scope.launch { repo.saveLyrics(trackId, text) }
-    }
+    fun playPlaylist(playlistId: Long) { scope.launch { val tracks = repo.tracksOf(playlistId); if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0) } } }
+    fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) { scope.launch { withContext(Dispatchers.Main) { onResult(repo.getLyrics(trackId)) } } }
+    fun saveLyrics(trackId: Long, text: String) { scope.launch { repo.saveLyrics(trackId, text) } }
 
     override fun onCleared() {
-        controller?.release()
-        controller = null
-        pollJob?.cancel()
-        sleepJob?.cancel()
-        super.onCleared()
+        controller?.release(); controller = null; pollJob?.cancel(); sleepJob?.cancel(); super.onCleared()
     }
 
     private fun Track.toMediaItem(): MediaItem =
-        MediaItem.Builder()
-            .setMediaId(id.toString())
-            .setUri(uri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title).setArtist(artist).setAlbumTitle(album)
-                    .setArtworkUri(artUri?.let { Uri.parse(it) }).build()
-            )
-            .build()
+        MediaItem.Builder().setMediaId(id.toString()).setUri(uri)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album).setArtworkUri(artUri?.let { Uri.parse(it) }).build()).build()
 }
