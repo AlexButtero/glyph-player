@@ -1,5 +1,6 @@
 package com.nothing.glyphplayer.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -7,24 +8,32 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
+import com.nothing.glyphplayer.ui.theme.Surface
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -46,6 +55,9 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     var trackToRename by remember { mutableStateOf<Track?>(null) }
     
     var pendingDeleteTrack by remember { mutableStateOf<Track?>(null) }
+    
+    var showCreateFromAdd by remember { mutableStateOf(false) }
+    var newPlaylistName by remember { mutableStateOf("") }
 
     val filtered = lib.filter {
         search.isBlank() || it.title.contains(search, true) || it.artist.contains(search, true)
@@ -111,12 +123,8 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                             .combinedClickable(
                                 onClick = {
                                     if (selectedTracks.isEmpty()) { 
-                                        if (state.currentTrackId == track.id) {
-                                            onTrackClick()
-                                        } else {
-                                            vm.playTracks(filtered, idx)
-                                            onTrackClick()
-                                        }
+                                        if (state.currentTrackId == track.id) onTrackClick()
+                                        else { vm.playTracks(filtered, idx); onTrackClick() }
                                     } else { 
                                         selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
                                     }
@@ -124,6 +132,22 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                 onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
                             ).padding(12.dp), verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (track.artUri != null) {
+                                AsyncImage(
+                                    model = track.artUri, contentDescription = null,
+                                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray)
+                            }
+                        }
+                        
+                        Spacer(Modifier.width(12.dp))
+
                         Column(Modifier.weight(1f)) {
                             Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                             Text("${track.artist} • ${track.album}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
@@ -137,12 +161,8 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
                                         showMenuForTrack = null
-                                        if (playlists.isEmpty()) {
-                                            vm.createPlaylist("Мой плейлист") { newId -> vm.addMultipleToPlaylist(newId, listOf(track.id)) }
-                                        } else {
-                                            selectedTracks = listOf(track.id)
-                                            showAddToPlaylist = true
-                                        }
+                                        selectedTracks = listOf(track.id)
+                                        showAddToPlaylist = true
                                     })
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = { trackToRename = track; showMenuForTrack = null })
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = { trackToDelete = track; showMenuForTrack = null })
@@ -165,11 +185,47 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         }
     }
 
-    if (showAddToPlaylist && playlists.isNotEmpty()) {
+    if (showAddToPlaylist) {
         AlertDialog(
-            onDismissRequest = { showAddToPlaylist = false }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
-            text = { Column { playlists.forEach { p -> TextButton(onClick = { vm.addMultipleToPlaylist(p.id, selectedTracks); showAddToPlaylist = false; selectedTracks = emptyList() }) { Text(p.name, color = Color.White) } } } },
-            confirmButton = {}, dismissButton = { TextButton(onClick = { showAddToPlaylist = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+            onDismissRequest = { showAddToPlaylist = false },
+            title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
+            text = {
+                Column {
+                    if (showCreateFromAdd) {
+                        OutlinedTextField(
+                            value = newPlaylistName, onValueChange = { newPlaylistName = it },
+                            label = { Text("Название", color = Color.Gray) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = {
+                            if (newPlaylistName.isNotBlank()) {
+                                vm.createPlaylist(newPlaylistName) { newId ->
+                                    vm.addMultipleToPlaylist(newId, selectedTracks)
+                                }
+                                showAddToPlaylist = false
+                                showCreateFromAdd = false
+                                newPlaylistName = ""
+                                selectedTracks = emptyList()
+                            }
+                        }, colors = ButtonDefaults.buttonColors(containerColor = Red)) {
+                            Text("Создать и добавить")
+                        }
+                    } else {
+                        playlists.forEach { p ->
+                            TextButton(onClick = { 
+                                vm.addMultipleToPlaylist(p.id, selectedTracks)
+                                showAddToPlaylist = false
+                                selectedTracks = emptyList()
+                            }) { Text(p.name, color = Color.White) }
+                        }
+                        TextButton(onClick = { showCreateFromAdd = true }) { Text("+ Создать новый", color = Red) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showAddToPlaylist = false; showCreateFromAdd = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } },
+            containerColor = Color(0xFF121212)
         )
     }
 
@@ -197,6 +253,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
 fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     var timeLeft by remember { mutableStateOf(6) }
     var dragOffsetY by remember { mutableStateOf(0f) }
+    val animatedOffset by animateFloatAsState(targetValue = dragOffsetY, label = "offset")
 
     LaunchedEffect(track.id) {
         while (timeLeft > 0) {
@@ -209,15 +266,16 @@ fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Un
     Card(
         modifier = modifier
             .fillMaxWidth(0.9f)
+            .offset { IntOffset(0, animatedOffset.roundToInt()) }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
-                        if (dragOffsetY > 50f) onDelete()
-                        dragOffsetY = 0f
+                        if (dragOffsetY > 100f) onDelete()
+                        else dragOffsetY = 0f
                     },
-                    onVerticalDrag = { change, dragAmount -> // dragAmount это Float
+                    onVerticalDrag = { change, dragAmount ->
                         change.consume()
-                        dragOffsetY += dragAmount // ИСПРАВЛЕНО
+                        dragOffsetY += dragAmount
                     }
                 )
             },
@@ -230,9 +288,7 @@ fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Un
         ) {
             Column(Modifier.weight(1f)) {
                 Text("Удаление: ${track.title}", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                Text("Смахните вниз, чтобы удалить", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             }
-            Spacer(Modifier.width(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("$timeLeft сек", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 Spacer(Modifier.width(16.dp))
