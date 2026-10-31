@@ -37,7 +37,11 @@ class MusicRepository(
     suspend fun createPlaylist(name: String): Long =
         db.playlists().insert(Playlist(name = name))
 
-    suspend fun deletePlaylist(id: Long) = db.playlists().delete(id)
+    suspend fun deletePlaylist(id: Long) {
+        // Сначала удаляем связи, затем сам плейлист
+        db.playlists().deletePlaylistTracks(id)
+        db.playlists().delete(id)
+    }
 
     suspend fun addToPlaylist(playlistId: Long, trackIds: List<Long>) {
         val items = trackIds.mapIndexed { i, id -> PlaylistTrack(playlistId, id, i) }
