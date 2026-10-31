@@ -212,11 +212,10 @@ fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Un
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
-                        // ИЗМЕНЕНО: Свайп вниз теперь подтверждает удаление
                         if (dragOffsetY > 50f) onDelete()
                         dragOffsetY = 0f
                     },
-                    onDrag = { change, dragAmount ->
+                    onVerticalDrag = { change, dragAmount -> // ИСПРАВЛЕНО: onVerticalDrag вместо onDrag
                         change.consume()
                         dragOffsetY += dragAmount.y
                     }
