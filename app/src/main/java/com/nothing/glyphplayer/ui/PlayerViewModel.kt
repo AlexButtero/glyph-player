@@ -116,13 +116,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun handleBackButton() {
         val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 500) {
-            prev()
-            lastBackPressTime = 0L
-        } else {
-            seekTo(0)
-            lastBackPressTime = now
-        }
+        if (now - lastBackPressTime < 500) { prev(); lastBackPressTime = 0L } 
+        else { seekTo(0); lastBackPressTime = now }
     }
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
@@ -170,13 +165,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun scanLibrary(onDone: (Int) -> Unit) { scope.launch { val n = repo.scanLibrary(); withContext(Dispatchers.Main) { onDone(n) } } }
     fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
+    fun renameTrack(track: Track, newTitle: String) { scope.launch { repo.renameTrack(track, newTitle) } }
     
-    fun renameTrack(track: Track, newTitle: String) { 
-        scope.launch { repo.renameTrack(track, newTitle) } 
-    }
-    
-    fun createPlaylist(name: String, onDone: (Long) -> Unit = {}) { 
-        scope.launch { val id = repo.createPlaylist(name); withContext(Dispatchers.Main) { onDone(id) } } 
+    // ОБНОВЛЕНО: Принимает описание и постер
+    fun createPlaylist(name: String, desc: String?, poster: String?, onDone: (Long) -> Unit = {}) { 
+        scope.launch { val id = repo.createPlaylist(name, desc, poster); withContext(Dispatchers.Main) { onDone(id) } } 
     }
     
     fun updatePlaylist(id: Long, name: String, desc: String?, poster: String?) {
