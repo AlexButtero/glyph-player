@@ -28,10 +28,12 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     var openedPlaylist by remember { mutableStateOf<Playlist?>(null) }
     var playlistTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
 
-    // Загрузка треков при открытии плейлиста
+    // ИСПРАВЛЕНО: Используем публичный метод getPlaylistTracks
     LaunchedEffect(openedPlaylist) {
         openedPlaylist?.let { p ->
-            playlistTracks = vm.repo.tracksOf(p.id)
+            vm.getPlaylistTracks(p.id) { tracks ->
+                playlistTracks = tracks
+            }
         }
     }
 
