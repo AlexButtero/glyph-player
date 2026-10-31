@@ -15,6 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nothing.glyphplayer.R
+import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 
@@ -25,11 +26,13 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     val playlists by vm.playlists.collectAsState()
     
     var search by remember { mutableStateOf("") }
-    var sortMode by remember { mutableStateOf(3) } // 3: Date Newest
+    var sortMode by remember { mutableStateOf(3) }
     var showSortMenu by remember { mutableStateOf(false) }
     
-    var selectedTracks by remember { mutableStateOf(setOf<Long>()) }
+    // Используем List вместо Set, чтобы сохранять порядок выбора
+    var selectedTracks by remember { mutableStateOf(listOf<Long>()) }
     var showAddToPlaylist by remember { mutableStateOf(false) }
+    var showMenuForTrack by remember { mutableStateOf<Track?>(null) }
 
     val filtered = lib.filter {
         search.isBlank() || it.title.contains(search, true) || it.artist.contains(search, true)
@@ -50,8 +53,21 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             ) {
                 Text(stringResource(R.string.lib_selected, selectedTracks.size), color = Color.White)
                 Row {
+                    TextButton(onClick = {
+                        val tracks = selectedTracks.mapNotNull { id -> lib.find { it.id == id } }
+                        vm.playNext(tracks)
+                        selectedTracks = emptyList()
+                    }) { Text(stringResource(R.string.lib_play_next), color = Red) }
+                    
+                    TextButton(onClick = {
+                        val tracks = selectedTracks.mapNotNull { id -> lib.find { it.id == id } }
+                        vm.addToQueue(tracks)
+                        selectedTracks = emptyList()
+                    }) { Text(stringResource(R.string.lib_add_to_queue), color = Red) }
+                    
                     TextButton(onClick = { showAddToPlaylist = true }) { Text(stringResource(R.string.lib_add_to_playlist), color = Red) }
-                    TextButton(onClick = { selectedTracks = emptySet() }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) }
+                    
+                    TextButton(onClick = { selectedTracks = emptyList() }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) }
                 }
             }
         } else {
@@ -87,14 +103,30 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                 if (selectedTracks.isEmpty()) { vm.playTracks(filtered, idx); onTrackClick() }
                                 else { selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id }
                             },
-                            onLongClick = { selectedTracks = selectedTracks + track.id }
-                        ).padding(12.dp)
+                            onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
+                        ).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         Text("${track.artist} • ${track.album}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                     }
-                    if (isSelected) Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall)
+                    if (isSelected) {
+                        Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall)
+                    } else {
+                        Box {
+                            TextButton(onClick = { showMenuForTrack = track }) { Text("⋮", color = Color.Gray) }
+                            DropdownMenu(
+                                expanded = showMenuForTrack?.id == track.id,
+                                onDismissRequest = { showMenuForTrack = null },
+                                containerColor = Color(0xFF1E1E1E)
+                            ) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = { vm.playNext(listOf(track)); showMenuForTrack = null })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { /* TODO: Add to playlist dialog for single */ showMenuForTrack = null })
+                            }
+                        }
+                    }
                 }
                 HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
             }
@@ -109,9 +141,9 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                 Column {
                     playlists.forEach { p ->
                         TextButton(onClick = {
-                            vm.addMultipleToPlaylist(p.id, selectedTracks.toList())
+                            vm.addMultipleToPlaylist(p.id, selectedTracks)
                             showAddToPlaylist = false
-                            selectedTracks = emptySet()
+                            selectedTracks = emptyList()
                         }) { Text(p.name, color = Color.White) }
                     }
                 }
