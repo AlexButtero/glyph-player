@@ -5,29 +5,29 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Группируем и масштабируем точно по центру -->
+    <!-- Сжимаем весь рисунок ровно на 70% и центрируем по безопасной зоне -->
     <group
-        android:scaleX="0.83"
-        android:scaleY="0.83"
-        android:translateX="9.2"
-        android:translateY="5.1">
+        android:scaleX="0.7"
+        android:scaleY="0.7"
+        android:translateX="14.2"
+        android:translateY="10.2">
         
-        <!-- Черный круг -->
+        <!-- Черный круг (ваш оригинал) -->
         <path
             android:fillColor="#000000"
             android:pathData="M54,54 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
             
-        <!-- Красный треугольник Play -->
+        <!-- Красный треугольник Play (ваш оригинал) -->
         <path
             android:fillColor="#D71921"
             android:pathData="M46,36 L72,54 L46,72 Z" />
             
-        <!-- Черная полоса -->
+        <!-- Черная полоса (ваш оригинал) -->
         <path
             android:fillColor="#000000"
             android:pathData="M16,96 L92,96 L92,100 L16,100 Z" />
             
-        <!-- Красная точка -->
+        <!-- Красная точка (ваш оригинал) -->
         <path
             android:fillColor="#D71921"
             android:pathData="M26,98 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0" />
