@@ -1,7 +1,9 @@
 package com.nothing.glyphplayer.data
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -16,9 +18,27 @@ class MusicRepository(
 
     suspend fun scanLibrary(): Int {
         val found = scanner.scan()
-        db.tracks().clear()
-        db.tracks().upsert(found)
-        return found.size
+        
+        val existing = db.tracks().all().associateBy { it.id }
+        
+        val merged = found.map { newTrack ->
+            val oldTrack = existing[newTrack.id]
+            if (oldTrack != null && oldTrack.title != newTrack.title) {
+                newTrack.copy(title = oldTrack.title)
+            } else {
+                newTrack
+            }
+        }
+        
+        val foundIds = merged.map { it.id }.toSet()
+        existing.keys.forEach { id ->
+            if (id !in foundIds) {
+                db.tracks().deleteById(id)
+            }
+        }
+        
+        db.tracks().upsert(merged)
+        return merged.size
     }
 
     suspend fun deleteTrack(track: Track) {
@@ -30,8 +50,39 @@ class MusicRepository(
         db.tracks().deleteById(track.id)
     }
 
-    suspend fun renameTrack(id: Long, newTitle: String) {
-        db.tracks().updateTitle(id, newTitle)
+    suspend fun renameTrack(track: Track, newTitle: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val uri = Uri.parse(track.uri)
+                var extension = ""
+                
+                // Получаем текущее имя файла, чтобы сохранить расширение (.mp3, .flac и т.д.)
+                context.contentResolver.query(uri, arrayOf(MediaStore.Audio.Media.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val displayName = cursor.getString(0)
+                        if (displayName != null) {
+                            val dotIndex = displayName.lastIndexOf('.')
+                            if (dotIndex != -1) {
+                                extension = displayName.substring(dotIndex)
+                            }
+                        }
+                    }
+                }
+                
+                val newDisplayName = newTitle + extension
+                
+                // Обновляем метаданные в системе
+                val values = ContentValues().apply {
+                    put(MediaStore.Audio.Media.DISPLAY_NAME, newDisplayName)
+                    put(MediaStore.Audio.Media.TITLE, newTitle)
+                }
+                context.contentResolver.update(uri, values, null, null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        // Обновляем в локальной базе для мгновенного отображения в UI
+        db.tracks().updateTitle(track.id, newTitle)
     }
 
     suspend fun createPlaylist(name: String): Long =
