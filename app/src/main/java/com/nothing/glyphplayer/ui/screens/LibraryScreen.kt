@@ -3,28 +3,34 @@ package com.nothing.glyphplayer.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     val lib by vm.library.collectAsState()
+    val state by vm.state.collectAsState()
     val playlists by vm.playlists.collectAsState()
     
     LaunchedEffect(Unit) { if (lib.isEmpty()) vm.scanLibrary { } }
@@ -39,7 +45,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     var trackToDelete by remember { mutableStateOf<Track?>(null) }
     var trackToRename by remember { mutableStateOf<Track?>(null) }
     
-    val snackbarHostState = remember { SnackbarHostState() }
     var pendingDeleteTrack by remember { mutableStateOf<Track?>(null) }
 
     val filtered = lib.filter {
@@ -53,27 +58,26 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         }
     }
 
-    LaunchedEffect(pendingDeleteTrack) {
-        pendingDeleteTrack?.let { track ->
-            val result = snackbarHostState.showSnackbar("Удаление через 6 сек...", "ОТМЕНИТЬ", duration = SnackbarDuration.Long)
-            if (result == SnackbarResult.ActionPerformed) pendingDeleteTrack = null
-            else { vm.deleteTrack(track); pendingDeleteTrack = null }
-        }
-    }
-
-    Scaffold(containerColor = Color.Black, snackbarHost = { SnackbarHost(snackbarHostState) }) { paddingValues ->
-        Column(Modifier.fillMaxSize().padding(paddingValues)) {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
             if (selectedTracks.isNotEmpty()) {
+                // Лаконичная панель мультивыбора
                 Row(
-                    Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 16.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(stringResource(R.string.lib_selected, selectedTracks.size), color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                    Row {
-                        TextButton(onClick = { vm.playNext(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }) { Text("⏭", color = Red, style = MaterialTheme.typography.titleLarge) }
-                        TextButton(onClick = { vm.addToQueue(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }) { Text("＋", color = Red, style = MaterialTheme.typography.titleLarge) }
-                        TextButton(onClick = { showAddToPlaylist = true }) { Text("💾", color = Red, style = MaterialTheme.typography.titleLarge) }
-                        TextButton(onClick = { selectedTracks = emptyList() }) { Text("✕", color = Color.Gray, style = MaterialTheme.typography.titleLarge) }
+                    Text("${selectedTracks.size}", color = Color.White, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { vm.playNext(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }, contentPadding = PaddingValues(4.dp)) { 
+                            Text("Следующими", color = Red, style = MaterialTheme.typography.labelSmall) 
+                        }
+                        TextButton(onClick = { vm.addToQueue(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }, contentPadding = PaddingValues(4.dp)) { 
+                            Text("В очередь", color = Red, style = MaterialTheme.typography.labelSmall) 
+                        }
+                        TextButton(onClick = { showAddToPlaylist = true }, contentPadding = PaddingValues(4.dp)) { 
+                            Text("В плейлист", color = Red, style = MaterialTheme.typography.labelSmall) 
+                        }
+                        IconButton(onClick = { selectedTracks = emptyList() }) { Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray) }
                     }
                 }
             } else {
@@ -106,7 +110,19 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                     Row(
                         Modifier.fillMaxWidth().background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
                             .combinedClickable(
-                                onClick = { if (selectedTracks.isEmpty()) { vm.playTracks(filtered, idx); onTrackClick() } else { selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id } },
+                                onClick = {
+                                    if (selectedTracks.isEmpty()) { 
+                                        if (state.currentTrackId == track.id) {
+                                            // Если трек уже играет, просто открываем плеер
+                                            onTrackClick()
+                                        } else {
+                                            vm.playTracks(filtered, idx)
+                                            onTrackClick()
+                                        }
+                                    } else { 
+                                        selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
+                                    }
+                                },
                                 onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
                             ).padding(12.dp), verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -121,6 +137,17 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                 DropdownMenu(expanded = showMenuForTrack?.id == track.id, onDismissRequest = { showMenuForTrack = null }, containerColor = Color(0xFF1E1E1E)) {
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = { vm.playNext(listOf(track)); showMenuForTrack = null })
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
+                                        showMenuForTrack = null
+                                        if (playlists.isEmpty()) {
+                                            // Если плейлистов нет, предлагаем создать
+                                            vm.createPlaylist("Мой плейлист") { newId -> vm.addMultipleToPlaylist(newId, listOf(track.id)) }
+                                        } else {
+                                            // Иначе показываем диалог
+                                            selectedTracks = listOf(track.id)
+                                            showAddToPlaylist = true
+                                        }
+                                    })
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = { trackToRename = track; showMenuForTrack = null })
                                     DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = { trackToDelete = track; showMenuForTrack = null })
                                 }
@@ -131,8 +158,19 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                 }
             }
         }
+
+        // Кастомный таймер удаления
+        if (pendingDeleteTrack != null) {
+            DeletionTimerSnackbar(
+                track = pendingDeleteTrack!!,
+                onDelete = { vm.deleteTrack(pendingDeleteTrack!!); pendingDeleteTrack = null },
+                onCancel = { pendingDeleteTrack = null },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+            )
+        }
     }
 
+    // Диалоги
     if (showAddToPlaylist && playlists.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showAddToPlaylist = false }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
@@ -158,5 +196,52 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             confirmButton = { TextButton(onClick = { if (newTitle.isNotBlank()) { vm.renameTrack(track.id, newTitle); trackToRename = null } }) { Text(stringResource(R.string.action_save), color = Red) } },
             dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
+    }
+}
+
+// Компонент кастомного таймера удаления
+@Composable
+fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+    var timeLeft by remember { mutableStateOf(6) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(track.id) {
+        while (timeLeft > 0) {
+            delay(1000)
+            timeLeft--
+        }
+        if (timeLeft == 0) onDelete()
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth(0.9f)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        if (dragOffsetY > 50f) onCancel()
+                        dragOffsetY = 0f
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        dragOffsetY += dragAmount.y
+                    }
+                )
+            },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Удаление: ${track.title}", color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1)
+            Spacer(Modifier.width(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$timeLeft сек", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.width(16.dp))
+                TextButton(onClick = onCancel) { Text("ОТМЕНИТЬ", color = Red, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
     }
 }
