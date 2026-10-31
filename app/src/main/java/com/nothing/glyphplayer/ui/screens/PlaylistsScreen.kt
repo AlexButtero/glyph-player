@@ -1,5 +1,8 @@
 package com.nothing.glyphplayer.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -7,25 +10,34 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Playlist
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
+import com.nothing.glyphplayer.ui.theme.Surface
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +50,8 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
 
     var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
     var pendingDeletePlaylist by remember { mutableStateOf<Playlist?>(null) }
+
+    var playlistToEdit by remember { mutableStateOf<Playlist?>(null) }
 
     LaunchedEffect(openedPlaylist) {
         openedPlaylist?.let { p ->
@@ -54,14 +68,37 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                     IconButton(onClick = { openedPlaylist = null }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
                 }
-                Text(openedPlaylist!!.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                
+                Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(100.dp).clip(RoundedCornerShape(8.dp)).background(Surface), contentAlignment = Alignment.Center) {
+                        if (openedPlaylist!!.posterUri != null) {
+                            AsyncImage(model = openedPlaylist!!.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        } else {
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(openedPlaylist!!.name, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                        if (!openedPlaylist!!.description.isNullOrBlank()) {
+                            Text(openedPlaylist!!.description!!, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 3)
+                        }
+                        Text("${playlistTracks.size} треков", color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                
                 Spacer(Modifier.height(16.dp))
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(playlistTracks) { track ->
                         Row(Modifier.fillMaxWidth().clickable { 
                             vm.playTracks(playlistTracks, playlistTracks.indexOf(track))
                             onPlaylistClick() 
-                        }.padding(vertical = 12.dp)) {
+                        }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)).background(Surface), contentAlignment = Alignment.Center) {
+                                if (track.artUri != null) AsyncImage(model = track.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                else Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
                             Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         }
                         HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
@@ -100,8 +137,17 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                             }
                         }
                     ) {
-                        Row(Modifier.fillMaxWidth().background(Color.Black).clickable { openedPlaylist = p }.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(p.name, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        Row(Modifier.fillMaxWidth().background(Color.Black).clickable { openedPlaylist = p }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface), contentAlignment = Alignment.Center) {
+                                if (p.posterUri != null) AsyncImage(model = p.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                else Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(p.name, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            
+                            IconButton(onClick = { playlistToEdit = p }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.Gray, modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
                     HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
@@ -135,6 +181,50 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
         )
     }
 
+    playlistToEdit?.let { p ->
+        var editName by remember { mutableStateOf(p.name) }
+        var editDesc by remember { mutableStateOf(p.description ?: "") }
+        var editPoster by remember { mutableStateOf(p.posterUri) }
+        
+        val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) editPoster = uri.toString()
+        }
+
+        AlertDialog(
+            onDismissRequest = { playlistToEdit = null },
+            title = { Text("Редактировать", color = Color.White) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editName, onValueChange = { editName = it },
+                        label = { Text("Название") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editDesc, onValueChange = { editDesc = it },
+                        label = { Text("Описание") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray)
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Выбрать постер")
+                    }
+                }
+            },
+            confirmButton = { 
+                TextButton(onClick = { 
+                    if (editName.isNotBlank()) {
+                        vm.updatePlaylist(p.id, editName, editDesc.ifBlank { null }, editPoster)
+                    }
+                    playlistToEdit = null 
+                }) { Text("СОХРАНИТЬ", color = Red) } 
+            },
+            dismissButton = { TextButton(onClick = { playlistToEdit = null }) { Text("ОТМЕНА", color = Color.Gray) } },
+            containerColor = Color(0xFF121212)
+        )
+    }
+
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         AlertDialog(
@@ -150,6 +240,7 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
 fun PlaylistDeletionTimerSnackbar(playlistName: String, onDelete: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     var timeLeft by remember { mutableStateOf(6) }
     var dragOffsetY by remember { mutableStateOf(0f) }
+    val animatedOffset by animateFloatAsState(targetValue = dragOffsetY, label = "offset")
 
     LaunchedEffect(playlistName) {
         while (timeLeft > 0) {
@@ -162,15 +253,16 @@ fun PlaylistDeletionTimerSnackbar(playlistName: String, onDelete: () -> Unit, on
     Card(
         modifier = modifier
             .fillMaxWidth(0.9f)
+            .offset { IntOffset(0, animatedOffset.roundToInt()) }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
-                        if (dragOffsetY > 50f) onDelete()
-                        dragOffsetY = 0f
+                        if (dragOffsetY > 100f) onDelete()
+                        else dragOffsetY = 0f
                     },
-                    onVerticalDrag = { change, dragAmount -> // dragAmount это Float
+                    onVerticalDrag = { change, dragAmount ->
                         change.consume()
-                        dragOffsetY += dragAmount // ИСПРАВЛЕНО
+                        dragOffsetY += dragAmount
                     }
                 )
             },
@@ -183,9 +275,7 @@ fun PlaylistDeletionTimerSnackbar(playlistName: String, onDelete: () -> Unit, on
         ) {
             Column(Modifier.weight(1f)) {
                 Text("Удаление: $playlistName", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Смахните вниз, чтобы удалить", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             }
-            Spacer(Modifier.width(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("$timeLeft сек", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 Spacer(Modifier.width(16.dp))
