@@ -15,10 +15,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.ui.components.MiniPlayer
 import com.nothing.glyphplayer.ui.screens.HomeScreen
 import com.nothing.glyphplayer.ui.screens.LibraryScreen
@@ -30,7 +32,12 @@ import com.nothing.glyphplayer.ui.theme.Red
 fun GlyphApp() {
     val nav = rememberNavController()
     var tab by remember { mutableStateOf(0) }
-    val tabs = listOf("HOME", "PLAYER", "LIBRARY", "SETTINGS")
+    val tabs = listOf(
+        "HOME" to stringResource(R.string.nav_home),
+        "PLAYER" to stringResource(R.string.nav_player),
+        "LIBRARY" to stringResource(R.string.nav_library),
+        "SETTINGS" to stringResource(R.string.nav_settings)
+    )
 
     Scaffold(
         containerColor = Color.Black,
@@ -38,12 +45,12 @@ fun GlyphApp() {
             Column {
                 MiniPlayer()
                 NavigationBar(containerColor = Color.Black) {
-                    tabs.forEachIndexed { i, label ->
+                    tabs.forEachIndexed { i, (route, label) ->
                         NavigationBarItem(
                             selected = tab == i,
                             onClick = {
                                 tab = i
-                                nav.navigate(label) {
+                                nav.navigate(route) {
                                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                                     launchSingleTop = true
                                 }
