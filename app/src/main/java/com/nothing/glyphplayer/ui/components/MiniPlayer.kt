@@ -45,7 +45,7 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
                 Text(state.artist ?: "", style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { vm.prev() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White) }
+                IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White) }
                 IconButton(onClick = { vm.playPause() }) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play/Pause", tint = Red) }
                 IconButton(onClick = { vm.next() }) { Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White) }
             }
