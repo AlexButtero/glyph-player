@@ -52,9 +52,7 @@ fun GlyphApp() {
                     tabs.forEachIndexed { i, label ->
                         NavigationBarItem(
                             selected = pagerState.currentPage == i,
-                            onClick = { 
-                                scope.launch { pagerState.animateScrollToPage(i) }
-                            },
+                            onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
                             icon = { Box(Modifier) },
                             label = { Text(label, color = if (pagerState.currentPage == i) Red else Color.Gray, fontWeight = if (pagerState.currentPage == i) FontWeight.Bold else FontWeight.Normal) }
                         )
@@ -66,7 +64,11 @@ fun GlyphApp() {
         Box(Modifier.fillMaxSize().padding(pad)) {
             NavHost(nav, startDestination = "MAIN") {
                 composable("MAIN") {
-                    HorizontalPager(state = pagerState) { page ->
+                    // ОПТИМИЗАЦИЯ: подгрузка соседних экранов
+                    HorizontalPager(
+                        state = pagerState,
+                        beyondViewportPageCount = 1 
+                    ) { page ->
                         when (page) {
                             0 -> LibraryScreen(onTrackClick = { nav.navigate("PLAYER") })
                             1 -> ArtistsScreen(onTrackClick = { nav.navigate("PLAYER") })
