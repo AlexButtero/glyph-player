@@ -1,5 +1,7 @@
 package com.nothing.glyphplayer.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -57,16 +59,18 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     var pendingDeleteTrack by remember { mutableStateOf<Track?>(null) }
     
     var showCreateFromAdd by remember { mutableStateOf(false) }
-    var newPlaylistName by remember { mutableStateOf("") }
 
-    val filtered = lib.filter {
-        search.isBlank() || it.title.contains(search, true) || it.artist.contains(search, true)
-    }.let {
-        when (sortMode) {
-            1 -> it.sortedBy { t -> t.title }
-            2 -> it.sortedBy { t -> t.artist }
-            3 -> it.sortedByDescending { t -> t.dateAdded }
-            else -> it
+    // ОПТИМИЗАЦИЯ: remember для фильтрации, чтобы не нагружать CPU при каждом клике
+    val filtered = remember(lib, search, sortMode) {
+        lib.filter {
+            search.isBlank() || it.title.contains(search, true) || it.artist.contains(search, true)
+        }.let {
+            when (sortMode) {
+                1 -> it.sortedBy { t -> t.title }
+                2 -> it.sortedBy { t -> t.artist }
+                3 -> it.sortedByDescending { t -> t.dateAdded }
+                else -> it
+            }
         }
     }
 
@@ -116,7 +120,8 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             }
 
             LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(filtered) { idx, track ->
+                // ОПТИМИЗАЦИЯ: ключ для плавной работы списка
+                itemsIndexed(filtered, key = { _, track -> track.id }) { idx, track ->
                     val isSelected = selectedTracks.contains(track.id)
                     Row(
                         Modifier.fillMaxWidth().background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
@@ -186,32 +191,27 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     }
 
     if (showAddToPlaylist) {
-        AlertDialog(
-            onDismissRequest = { showAddToPlaylist = false },
-            title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
-            text = {
-                Column {
-                    if (showCreateFromAdd) {
-                        OutlinedTextField(
-                            value = newPlaylistName, onValueChange = { newPlaylistName = it },
-                            label = { Text("Название", color = Color.Gray) },
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Button(onClick = {
-                            if (newPlaylistName.isNotBlank()) {
-                                vm.createPlaylist(newPlaylistName) { newId ->
-                                    vm.addMultipleToPlaylist(newId, selectedTracks)
-                                }
-                                showAddToPlaylist = false
-                                showCreateFromAdd = false
-                                newPlaylistName = ""
-                                selectedTracks = emptyList()
-                            }
-                        }, colors = ButtonDefaults.buttonColors(containerColor = Red)) {
-                            Text("Создать и добавить")
-                        }
-                    } else {
+        if (showCreateFromAdd) {
+            // ИСПОЛЬЗУЕМ НОВЫЙ ДИАЛОГ
+            PlaylistEditorDialog(
+                initialName = "",
+                onSave = { name, desc, poster ->
+                    val tracksToAdd = selectedTracks.toList() // ФИКС БАГА: Сохраняем список до очистки
+                    vm.createPlaylist(name, desc, poster) { newId ->
+                        vm.addMultipleToPlaylist(newId, tracksToAdd)
+                    }
+                    showAddToPlaylist = false
+                    showCreateFromAdd = false
+                    selectedTracks = emptyList()
+                },
+                onDismiss = { showCreateFromAdd = false }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showAddToPlaylist = false },
+                title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
+                text = {
+                    Column {
                         playlists.forEach { p ->
                             TextButton(onClick = { 
                                 vm.addMultipleToPlaylist(p.id, selectedTracks)
@@ -221,12 +221,12 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                         }
                         TextButton(onClick = { showCreateFromAdd = true }) { Text("+ Создать новый", color = Red) }
                     }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { showAddToPlaylist = false; showCreateFromAdd = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } },
-            containerColor = Color(0xFF121212)
-        )
+                },
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = { showAddToPlaylist = false; showCreateFromAdd = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } },
+                containerColor = Color(0xFF121212)
+            )
+        }
     }
 
     trackToDelete?.let { track ->
@@ -246,7 +246,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             confirmButton = { 
                 TextButton(onClick = { 
                     if (newTitle.isNotBlank()) { 
-                        vm.renameTrack(track, newTitle) // ИСПРАВЛЕНО
+                        vm.renameTrack(track, newTitle)
                         trackToRename = null 
                     } 
                 }) { Text(stringResource(R.string.action_save), color = Red) } 
@@ -254,6 +254,52 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
+}
+
+@Composable
+fun PlaylistEditorDialog(
+    initialName: String = "",
+    initialDesc: String = "",
+    initialPoster: String? = null,
+    onSave: (String, String?, String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var desc by remember { mutableStateOf(initialDesc) }
+    var poster by remember { mutableStateOf(initialPoster) }
+    
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) poster = uri.toString()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initialName.isEmpty()) "Новый плейлист" else "Редактировать", color = Color.White) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Название") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = desc, onValueChange = { desc = it },
+                    label = { Text("Описание") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                    Text(if (poster == null) "Выбрать постер" else "Постер выбран", color = Color.White)
+                }
+            }
+        },
+        confirmButton = { 
+            TextButton(onClick = { if (name.isNotBlank()) onSave(name, desc.ifBlank { null }, poster) }) { Text("СОХРАНИТЬ", color = Red) } 
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("ОТМЕНА", color = Color.Gray) } },
+        containerColor = Color(0xFF121212)
+    )
 }
 
 @Composable
