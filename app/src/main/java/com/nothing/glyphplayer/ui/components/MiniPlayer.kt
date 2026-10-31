@@ -2,9 +2,12 @@ package com.nothing.glyphplayer.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,19 +32,23 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
     val progress = if (state.durationMs > 0) state.positionMs.toFloat() / state.durationMs else 0f
 
     Column(
-        Modifier.fillMaxWidth().height(56.dp).clickable { onClick() }.padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().height(64.dp).clickable { onClick() }.padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             AsyncImage(
                 model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.size(36.dp).clip(MaterialTheme.shapes.small)
+                modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small)
             )
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Text(state.title ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(state.artist ?: "", style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(if (state.isPlaying) "❚❚" else "▶", color = Red, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.clickable { vm.playPause() })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { vm.prev() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White) }
+                IconButton(onClick = { vm.playPause() }) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play/Pause", tint = Red) }
+                IconButton(onClick = { vm.next() }) { Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White) }
+            }
         }
         LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, color = Red, trackColor = Surface, modifier = Modifier.fillMaxWidth().height(2.dp))
     }
