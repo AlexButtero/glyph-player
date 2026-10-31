@@ -33,22 +33,18 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     val playlists by vm.playlists.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
     
-    // Состояния для навигации внутри плейлиста
     var openedPlaylist by remember { mutableStateOf<Playlist?>(null) }
     var playlistTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
 
-    // Состояния для удаления
     var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
     var pendingDeletePlaylist by remember { mutableStateOf<Playlist?>(null) }
 
-    // Загрузка треков при открытии плейлиста
     LaunchedEffect(openedPlaylist) {
         openedPlaylist?.let { p ->
             vm.getPlaylistTracks(p.id) { tracks -> playlistTracks = tracks }
         }
     }
 
-    // Экран внутри плейлиста
     if (openedPlaylist != null) {
         var dragOffsetX by remember { mutableStateOf(0f) }
         Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -76,7 +72,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
         return
     }
 
-    // Экран со списком плейлистов
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text(stringResource(R.string.nav_playlists), style = MaterialTheme.typography.headlineLarge, color = Color.White)
@@ -86,13 +81,12 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
             
             LazyColumn(Modifier.fillMaxSize()) {
                 items(playlists) { p ->
-                    // Компонент свайпа
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
                             if (value == SwipeToDismissBoxValue.EndToStart) {
-                                playlistToDelete = p // Показываем диалог
+                                playlistToDelete = p
                             }
-                            false // Возвращаем false, чтобы элемент не исчезал сразу, ждем подтверждения
+                            false
                         }
                     )
 
@@ -115,7 +109,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
             }
         }
 
-        // Плашка таймера удаления
         if (pendingDeletePlaylist != null) {
             PlaylistDeletionTimerSnackbar(
                 playlistName = pendingDeletePlaylist!!.name,
@@ -126,7 +119,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
         }
     }
 
-    // Диалог подтверждения удаления
     playlistToDelete?.let { p ->
         AlertDialog(
             onDismissRequest = { playlistToDelete = null },
@@ -143,7 +135,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
         )
     }
 
-    // Диалог создания плейлиста
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         AlertDialog(
@@ -155,7 +146,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     }
 }
 
-// Компонент таймера удаления плейлиста
 @Composable
 fun PlaylistDeletionTimerSnackbar(playlistName: String, onDelete: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     var timeLeft by remember { mutableStateOf(6) }
@@ -178,9 +168,9 @@ fun PlaylistDeletionTimerSnackbar(playlistName: String, onDelete: () -> Unit, on
                         if (dragOffsetY > 50f) onDelete()
                         dragOffsetY = 0f
                     },
-                    onVerticalDrag = { change, dragAmount ->
+                    onVerticalDrag = { change, dragAmount -> // dragAmount это Float
                         change.consume()
-                        dragOffsetY += dragAmount.y
+                        dragOffsetY += dragAmount // ИСПРАВЛЕНО
                     }
                 )
             },
