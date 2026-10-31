@@ -90,7 +90,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
             title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
             artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = c.shuffleModeEnabled,
+            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = _state.value.shuffle, // Не берем из контроллера, так как мы делаем физический шаффл
             repeatMode = c.repeatMode, speed = c.playbackParameters.speed,
             queue = q, currentIndex = c.currentMediaItemIndex
         )
@@ -135,7 +135,26 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
     fun seekToIndex(index: Int) { controller?.seekToDefaultPosition(index); controller?.play() }
     
-    fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
+    fun toggleShuffle() {
+        val c = controller ?: return
+        val currentItem = c.currentMediaItem ?: return
+        val currentPos = c.currentPosition
+        val wasPlaying = c.isPlaying
+        
+        val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
+        if (items.isEmpty()) return
+        
+        // Физически перемешиваем очередь, сохраняя текущий трек на первом месте
+        items.remove(currentItem)
+        items.shuffle()
+        items.add(0, currentItem)
+        
+        c.setMediaItems(items, 0, currentPos)
+        if (wasPlaying) c.play()
+        
+        _state.value = _state.value.copy(shuffle = !_state.value.shuffle)
+    }
+
     fun cycleRepeat() {
         controller?.let {
             it.repeatMode = when (it.repeatMode) {
@@ -167,7 +186,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
     fun renameTrack(track: Track, newTitle: String) { scope.launch { repo.renameTrack(track, newTitle) } }
     
-    // ОБНОВЛЕНО: Принимает описание и постер
     fun createPlaylist(name: String, desc: String?, poster: String?, onDone: (Long) -> Unit = {}) { 
         scope.launch { val id = repo.createPlaylist(name, desc, poster); withContext(Dispatchers.Main) { onDone(id) } } 
     }
