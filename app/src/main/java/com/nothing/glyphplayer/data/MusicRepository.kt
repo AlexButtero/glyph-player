@@ -37,8 +37,11 @@ class MusicRepository(
     suspend fun createPlaylist(name: String): Long =
         db.playlists().insert(Playlist(name = name))
 
+    suspend fun updatePlaylist(id: Long, name: String, desc: String?, poster: String?) {
+        db.playlists().updatePlaylist(id, name, desc, poster)
+    }
+
     suspend fun deletePlaylist(id: Long) {
-        // Сначала удаляем связи, затем сам плейлист
         db.playlists().deletePlaylistTracks(id)
         db.playlists().delete(id)
     }
