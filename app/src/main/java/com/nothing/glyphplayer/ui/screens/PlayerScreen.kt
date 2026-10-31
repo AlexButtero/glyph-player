@@ -1,8 +1,15 @@
 package com.nothing.glyphplayer.ui.screens
 
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -13,16 +20,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.playback.EqualizerManager
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @Composable
@@ -31,26 +41,44 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     val lyrics by vm.lyrics.collectAsState()
     var showEq by remember { mutableStateOf(false) }
     var showSpeed by remember { mutableStateOf(false) }
+    
     var showLyrics by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
+    
     var sliderPos by remember { mutableStateOf<Float?>(null) }
+    
+    // Переменные для свайпов
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
 
     if (showLyrics) {
-        LyricsScreen(lyrics, state.positionMs, onBack = { showLyrics = false })
+        LyricsScreen(vm, state.currentTrackId, state.positionMs, onBack = { showLyrics = false })
+        return
+    }
+    
+    if (showQueue) {
+        QueueScreen(state.queue, state.currentIndex, onBack = { showQueue = false }, onSelect = { vm.seekToIndex(it); showQueue = false })
         return
     }
 
     Column(
         Modifier.fillMaxSize().background(Color.Black)
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    if (abs(dragAmount.x) > abs(dragAmount.y)) {
-                        if (dragAmount.x > 100) vm.next()
-                        else if (dragAmount.x < -100) vm.prev()
-                    } else {
-                        if (dragAmount.y < -150 && lyrics.isNotEmpty()) showLyrics = true
+                detectDragGestures(
+                    onDragEnd = {
+                        if (dragOffsetX > 150f) { showQueue = true }
+                        else if (dragOffsetY > 150f) { onBack() }
+                        else if (dragOffsetY < -150f) { showLyrics = true }
+                        
+                        dragOffsetX = 0f
+                        dragOffsetY = 0f
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        dragOffsetX += dragAmount.x
+                        dragOffsetY += dragAmount.y
                     }
-                }
+                )
             }.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -104,7 +132,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             TextButton(onClick = { showEq = true }) { Text(stringResource(R.string.player_equalizer), color = Red, style = MaterialTheme.typography.labelSmall) }
             TextButton(onClick = { showSpeed = true }) { Text("${stringResource(R.string.player_speed)} ${state.speed}x", color = Color.Gray, style = MaterialTheme.typography.labelSmall) }
-            TextButton(onClick = { if (lyrics.isNotEmpty()) showLyrics = true }) { Text(stringResource(R.string.player_lyrics), color = if (lyrics.isNotEmpty()) Red else Color.Gray, style = MaterialTheme.typography.labelSmall) }
+            TextButton(onClick = { showLyrics = true }) { Text(stringResource(R.string.player_lyrics), color = Red, style = MaterialTheme.typography.labelSmall) }
         }
     }
 
@@ -113,14 +141,117 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 @Composable
-private fun LyricsScreen(lyrics: List<com.nothing.glyphplayer.playback.LyricLine>, currentPos: Long, onBack: () -> Unit) {
+fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
     Column(Modifier.fillMaxSize().background(Color.Black).padding(16.dp)) {
-        TextButton(onClick = onBack) { Text("⌄", color = Color.White, style = MaterialTheme.typography.headlineLarge) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            TextButton(onClick = onBack) { Text("⌄", color = Color.White, style = MaterialTheme.typography.headlineLarge) }
+        }
+        Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(16.dp))
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            lyrics.forEach { line ->
-                val active = line.timeMs <= currentPos && (lyrics.getOrNull(lyrics.indexOf(line) + 1)?.timeMs ?: Long.MAX_VALUE) > currentPos
-                Text(line.text, color = if (active) Red else Color.Gray, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), textAlign = TextAlign.Center)
+        LazyColumn(Modifier.fillMaxSize()) {
+            itemsIndexed(queue) { idx, item ->
+                val isCurrent = idx == currentIndex
+                Row(
+                    Modifier.fillMaxWidth().clickable { onSelect(idx) }.padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            item.mediaMetadata.title?.toString() ?: "Unknown",
+                            color = if (isCurrent) Red else Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(item.mediaMetadata.artist?.toString() ?: "", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (isCurrent) Text(stringResource(R.string.queue_now_playing), color = Red, style = MaterialTheme.typography.labelSmall)
+                }
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+            }
+        }
+    }
+}
+
+@Composable
+fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var manualText by remember { mutableStateOf("") }
+    var isEditing by remember { mutableStateOf(false) }
+    
+    val lyrics = vm.lyrics.collectAsState().value
+
+    // Загружаем сохраненный текст при открытии, если он есть
+    LaunchedEffect(trackId) {
+        trackId?.let { id ->
+            vm.getSavedLyrics(id) { saved ->
+                if (!saved.isNullOrBlank()) {
+                    manualText = saved
+                }
+            }
+        }
+    }
+
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let {
+            val text = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { r -> r.readText() }
+            if (text != null) { manualText = text; isEditing = true }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(Color.Black).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("⌄", color = Color.White, style = MaterialTheme.typography.headlineLarge) }
+            if (trackId != null) {
+                Row {
+                    if (!isEditing) {
+                        TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
+                    } else {
+                        TextButton(onClick = { 
+                            vm.saveLyrics(trackId, manualText)
+                            isEditing = false 
+                        }) { Text(stringResource(R.string.lyrics_save), color = Red) }
+                    }
+                }
+            }
+        }
+        
+        if (isEditing) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TextButton(onClick = { 
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = clipboard.primaryClip
+                    if (clip != null && clip.itemCount > 0) {
+                        manualText = clip.getItemAt(0).text.toString()
+                    }
+                }) { Text(stringResource(R.string.lyrics_paste), color = Color.Gray) }
+                TextButton(onClick = { filePicker.launch("text/*") }) { Text(stringResource(R.string.lyrics_import_file), color = Color.Gray) }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = manualText,
+                onValueChange = { manualText = it },
+                modifier = Modifier.fillMaxSize(),
+                placeholder = { Text(stringResource(R.string.lyrics_hint), color = Color.Gray) },
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+            )
+        } else {
+            if (manualText.isNotBlank()) {
+                // Отображаем введенный вручную текст
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(manualText, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                }
+            } else if (lyrics.isNotEmpty()) {
+                // Отображаем LRC файл
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    lyrics.forEach { line ->
+                        val active = line.timeMs <= currentPos && (lyrics.getOrNull(lyrics.indexOf(line) + 1)?.timeMs ?: Long.MAX_VALUE) > currentPos
+                        Text(line.text, color = if (active) Red else Color.Gray, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), textAlign = TextAlign.Center)
+                    }
+                }
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.lyrics_no_text), color = Color.Gray)
+                }
             }
         }
     }
