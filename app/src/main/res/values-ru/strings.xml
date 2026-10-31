@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Glyph Player</string>
-
     <string name="nav_library">БИБЛИОТЕКА</string>
     <string name="nav_artists">ИСПОЛНИТЕЛИ</string>
     <string name="nav_playlists">ПЛЕЙЛИСТЫ</string>
@@ -20,11 +19,17 @@
     <string name="lib_play_next">Следующими</string>
     <string name="lib_cancel">ОТМЕНА</string>
 
-    <!-- Context Menu -->
     <string name="menu_add_to_playlist">В плейлист</string>
     <string name="menu_add_to_queue">В очередь</string>
     <string name="menu_play_next">Играть следующим</string>
-    <string name="menu_go_to_artist">Перейти к исполнителю</string>
+    <string name="menu_rename">Переименовать</string>
+    <string name="menu_delete">Удалить</string>
+
+    <string name="dialog_rename_title">Переименовать трек</string>
+    <string name="action_save">СОХРАНИТЬ</string>
+    <string name="dialog_delete_title">Удалить трек?</string>
+    <string name="dialog_delete_message">Вы уверены, что хотите удалить этот трек с устройства?</string>
+    <string name="action_delete">УДАЛИТЬ</string>
 
     <string name="playlists_create">СОЗДАТЬ ПЛЕЙЛИСТ</string>
     <string name="playlists_new">Новый плейлист</string>
@@ -41,8 +46,6 @@
     <string name="player_eq_unavailable">Эквалайзер недоступен</string>
     <string name="player_band">Полоса %d</string>
 
-    <!-- Lyrics Editor -->
-    <string name="lyrics_title">ТЕКСТ ПЕСНИ</string>
     <string name="lyrics_no_text">Текст отсутствует</string>
     <string name="lyrics_edit">Изменить</string>
     <string name="lyrics_import_file">Импорт из файла</string>
@@ -50,7 +53,6 @@
     <string name="lyrics_save">Сохранить</string>
     <string name="lyrics_hint">Введите текст песни…</string>
 
-    <!-- Queue -->
     <string name="queue_title">ОЧЕРЕДЬ</string>
     <string name="queue_now_playing">Сейчас играет</string>
 
@@ -64,7 +66,7 @@
     <string name="settings_sleep_minutes">%d мин</string>
     <string name="settings_language">Язык</string>
     <string name="settings_about">О ПРИЛОЖЕНИИ</string>
-    <string name="settings_version">Glyph Player 1.3.0</string>
+    <string name="settings_version">Glyph Player 1.5.0</string>
     <string name="settings_subtitle">Nothing OS style • fully offline</string>
 
     <string name="lang_system">Системный</string>
