@@ -3,7 +3,7 @@
     <string name="app_name">Glyph Player</string>
 
     <string name="nav_library">БИБЛИОТЕКА</string>
-    <string name="nav_my_wave">МОЯ ВОЛНА</string>
+    <string name="nav_artists">ИСПОЛНИТЕЛИ</string>
     <string name="nav_playlists">ПЛЕЙЛИСТЫ</string>
     <string name="nav_settings">НАСТРОЙКИ</string>
 
@@ -16,7 +16,15 @@
     <string name="lib_search_hint">поиск…</string>
     <string name="lib_selected">Выбрано: %d</string>
     <string name="lib_add_to_playlist">В плейлист</string>
+    <string name="lib_add_to_queue">В очередь</string>
+    <string name="lib_play_next">Следующими</string>
     <string name="lib_cancel">ОТМЕНА</string>
+
+    <!-- Context Menu -->
+    <string name="menu_add_to_playlist">В плейлист</string>
+    <string name="menu_add_to_queue">В очередь</string>
+    <string name="menu_play_next">Играть следующим</string>
+    <string name="menu_go_to_artist">Перейти к исполнителю</string>
 
     <string name="playlists_create">СОЗДАТЬ ПЛЕЙЛИСТ</string>
     <string name="playlists_new">Новый плейлист</string>
@@ -25,10 +33,6 @@
     <string name="playlists_delete">УДАЛИТЬ</string>
     <string name="playlists_add_to">Добавить в…</string>
 
-    <string name="my_wave_title">МОЯ ВОЛНА</string>
-    <string name="my_wave_subtitle">Бесконечный поток треков, основанный на ваших предпочтениях.</string>
-    <string name="my_wave_start">ЗАПУСТИТЬ ВОЛНУ ▶</string>
-
     <string name="player_equalizer">ЭКВАЛАЙЗЕР</string>
     <string name="player_lyrics">ТЕКСТ</string>
     <string name="player_speed">Скорость</string>
@@ -36,6 +40,19 @@
     <string name="player_close">ЗАКРЫТЬ</string>
     <string name="player_eq_unavailable">Эквалайзер недоступен</string>
     <string name="player_band">Полоса %d</string>
+
+    <!-- Lyrics Editor -->
+    <string name="lyrics_title">ТЕКСТ ПЕСНИ</string>
+    <string name="lyrics_no_text">Текст отсутствует</string>
+    <string name="lyrics_edit">Изменить</string>
+    <string name="lyrics_import_file">Импорт из файла</string>
+    <string name="lyrics_paste">Вставить из буфера</string>
+    <string name="lyrics_save">Сохранить</string>
+    <string name="lyrics_hint">Введите текст песни…</string>
+
+    <!-- Queue -->
+    <string name="queue_title">ОЧЕРЕДЬ</string>
+    <string name="queue_now_playing">Сейчас играет</string>
 
     <string name="settings_title">НАСТРОЙКИ</string>
     <string name="settings_library">БИБЛИОТЕКА</string>
@@ -47,7 +64,7 @@
     <string name="settings_sleep_minutes">%d мин</string>
     <string name="settings_language">Язык</string>
     <string name="settings_about">О ПРИЛОЖЕНИИ</string>
-    <string name="settings_version">Glyph Player 1.2.0</string>
+    <string name="settings_version">Glyph Player 1.3.0</string>
     <string name="settings_subtitle">Nothing OS style • fully offline</string>
 
     <string name="lang_system">Системный</string>
