@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import com.nothing.glyphplayer.ui.theme.Surface
@@ -37,7 +38,9 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             AsyncImage(
-                model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop,
+                model = state.artUri ?: R.drawable.ic_fallback_music, // ИСПОЛЬЗУЕМ ЗАГЛУШКУ
+                contentDescription = null, 
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small)
             )
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
