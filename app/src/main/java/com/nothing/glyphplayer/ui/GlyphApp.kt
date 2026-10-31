@@ -16,15 +16,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.ui.components.MiniPlayer
-import com.nothing.glyphplayer.ui.screens.HomeScreen
 import com.nothing.glyphplayer.ui.screens.LibraryScreen
+import com.nothing.glyphplayer.ui.screens.MyWaveScreen
 import com.nothing.glyphplayer.ui.screens.PlayerScreen
+import com.nothing.glyphplayer.ui.screens.PlaylistsScreen
 import com.nothing.glyphplayer.ui.screens.SettingsScreen
 import com.nothing.glyphplayer.ui.theme.Red
 
@@ -32,10 +33,11 @@ import com.nothing.glyphplayer.ui.theme.Red
 fun GlyphApp() {
     val nav = rememberNavController()
     var tab by remember { mutableStateOf(0) }
+    
     val tabs = listOf(
-        "HOME" to stringResource(R.string.nav_home),
-        "PLAYER" to stringResource(R.string.nav_player),
         "LIBRARY" to stringResource(R.string.nav_library),
+        "MY_WAVE" to stringResource(R.string.nav_my_wave),
+        "PLAYLISTS" to stringResource(R.string.nav_playlists),
         "SETTINGS" to stringResource(R.string.nav_settings)
     )
 
@@ -43,7 +45,7 @@ fun GlyphApp() {
         containerColor = Color.Black,
         bottomBar = {
             Column {
-                MiniPlayer()
+                MiniPlayer(onClick = { nav.navigate("PLAYER") { launchSingleTop = true } })
                 NavigationBar(containerColor = Color.Black) {
                     tabs.forEachIndexed { i, (route, label) ->
                         NavigationBarItem(
@@ -55,16 +57,8 @@ fun GlyphApp() {
                                     launchSingleTop = true
                                 }
                             },
-                            icon = {
-                                Text(
-                                    label.take(1),
-                                    color = if (tab == i) Red else Color.Gray,
-                                    textAlign = TextAlign.Center
-                                )
-                            },
-                            label = {
-                                Text(label, color = if (tab == i) Red else Color.Gray)
-                            }
+                            icon = { Box(Modifier) },
+                            label = { Text(label, color = if (tab == i) Red else Color.Gray, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal) }
                         )
                     }
                 }
@@ -72,11 +66,12 @@ fun GlyphApp() {
         }
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
-            NavHost(nav, startDestination = "HOME") {
-                composable("HOME") { HomeScreen() }
-                composable("PLAYER") { PlayerScreen() }
-                composable("LIBRARY") { LibraryScreen() }
+            NavHost(nav, startDestination = "LIBRARY") {
+                composable("LIBRARY") { LibraryScreen(onTrackClick = { nav.navigate("PLAYER") }) }
+                composable("MY_WAVE") { MyWaveScreen(onTrackClick = { nav.navigate("PLAYER") }) }
+                composable("PLAYLISTS") { PlaylistsScreen(onPlaylistClick = { nav.navigate("PLAYER") }) }
                 composable("SETTINGS") { SettingsScreen() }
+                composable("PLAYER") { PlayerScreen(onBack = { nav.popBackStack() }) }
             }
         }
     }
