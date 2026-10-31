@@ -18,7 +18,6 @@ import com.nothing.glyphplayer.playback.LyricLine
 import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.playback.PlayerService
 import com.nothing.glyphplayer.smart.MyWave
-import com.nothing.glyphplayer.smart.PromptedPlaylist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,11 +48,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val context = app.applicationContext
     private val scope = viewModelScope
 
-    val library: StateFlow<List<Track>> =
-        repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
-
-    val playlists: StateFlow<List<Playlist>> =
-        repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
+    val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
+    val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
@@ -66,9 +62,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
 
-    init {
-        connect()
-    }
+    init { connect() }
 
     private fun connect() {
         val token = SessionToken(context, ComponentName(context, PlayerService::class.java))
@@ -89,26 +83,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         val item = c.currentMediaItem
         _state.value = _state.value.copy(
-            isPlaying = c.isPlaying,
-            currentTrackId = item?.mediaId?.toLongOrNull(),
-            title = item?.mediaMetadata?.title?.toString(),
-            artist = item?.mediaMetadata?.artist?.toString(),
-            artUri = item?.mediaMetadata?.artworkUri?.toString(),
-            durationMs = c.duration.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0),
-            shuffle = c.shuffleModeEnabled,
-            repeatMode = c.repeatMode,
-            speed = c.playbackParameters.speed
+            isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
+            title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
+            artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
+            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = c.shuffleModeEnabled,
+            repeatMode = c.repeatMode, speed = c.playbackParameters.speed
         )
         val newId = _state.value.currentTrackId
         if (newId != null && newId != currentLyricsTrackId) {
             currentLyricsTrackId = newId
             val uri = library.value.find { it.id == newId }?.uri
-            if (uri != null) {
-                scope.launch {
-                    _lyrics.value = LyricsLoader.load(context, uri)
-                }
-            } else _lyrics.value = emptyList()
+            if (uri != null) { scope.launch { _lyrics.value = LyricsLoader.load(context, uri) } } else _lyrics.value = emptyList()
         }
     }
 
@@ -143,11 +128,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun next() { controller?.seekToNextMediaItem() }
     fun prev() { controller?.seekToPreviousMediaItem() }
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
-
-    fun toggleShuffle() {
-        controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
-    }
-
+    fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
     fun cycleRepeat() {
         controller?.let {
             it.repeatMode = when (it.repeatMode) {
@@ -182,17 +163,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun shuffleAll() {
+        val lib = library.value
+        if (lib.isEmpty()) return
+        playTracks(lib.shuffled(), 0)
+    }
+
     fun queueMyWave() {
         val lib = library.value
         if (lib.isEmpty()) return
         val current = _state.value.currentTrackId?.let { id -> lib.find { it.id == id } }
         val next = MyWave.next(current, lib, emptySet()) ?: return
         playTracks(lib, lib.indexOf(next))
-    }
-
-    fun playPrompted(prompt: String) {
-        val result = PromptedPlaylist.build(prompt, library.value)
-        if (result.isNotEmpty()) playTracks(result, 0)
     }
 
     fun scanLibrary(onDone: (Int) -> Unit) {
@@ -209,14 +191,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun deletePlaylist(id: Long) {
-        scope.launch { repo.deletePlaylist(id) }
-    }
-
-    fun addToPlaylist(playlistId: Long, trackIds: List<Long>) {
-        scope.launch { repo.addToPlaylist(playlistId, trackIds) }
-    }
-
+    fun deletePlaylist(id: Long) { scope.launch { repo.deletePlaylist(id) } }
+    fun addMultipleToPlaylist(playlistId: Long, trackIds: List<Long>) { scope.launch { repo.addToPlaylist(playlistId, trackIds) } }
+    
     fun playPlaylist(playlistId: Long) {
         scope.launch {
             val tracks = repo.tracksOf(playlistId)
@@ -238,11 +215,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             .setUri(uri)
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setArtist(artist)
-                    .setAlbumTitle(album)
-                    .setArtworkUri(artUri?.let { Uri.parse(it) })
-                    .build()
+                    .setTitle(title).setArtist(artist).setAlbumTitle(album)
+                    .setArtworkUri(artUri?.let { Uri.parse(it) }).build()
             )
             .build()
 }
