@@ -5,29 +5,29 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Масштабируем весь ваш рисунок на 80% и центрируем -->
+    <!-- Группируем и масштабируем точно по центру -->
     <group
-        android:scaleX="0.8"
-        android:scaleY="0.8"
-        android:translateX="10.8"
-        android:translateY="6.8">
+        android:scaleX="0.83"
+        android:scaleY="0.83"
+        android:translateX="9.2"
+        android:translateY="5.1">
         
-        <!-- Черный круг (из вашего SVG) -->
+        <!-- Черный круг -->
         <path
             android:fillColor="#000000"
             android:pathData="M54,54 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
             
-        <!-- Красный треугольник Play (из вашего SVG) -->
+        <!-- Красный треугольник Play -->
         <path
             android:fillColor="#D71921"
             android:pathData="M46,36 L72,54 L46,72 Z" />
             
-        <!-- Черная полоса (из вашего SVG) -->
+        <!-- Черная полоса -->
         <path
             android:fillColor="#000000"
             android:pathData="M16,96 L92,96 L92,100 L16,100 Z" />
             
-        <!-- Красная точка на полосе (из вашего SVG) -->
+        <!-- Красная точка -->
         <path
             android:fillColor="#D71921"
             android:pathData="M26,98 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0" />
