@@ -27,8 +27,14 @@ interface PlaylistDao {
     fun observeAll(): Flow<List<Playlist>>
     @Insert
     suspend fun insert(p: Playlist): Long
+    
     @Query("DELETE FROM playlists WHERE id = :id")
     suspend fun delete(id: Long)
+    
+    // ДОБАВЛЕНО: Удаление связей треков при удалении плейлиста
+    @Query("DELETE FROM playlist_tracks WHERE playlistId = :id")
+    suspend fun deletePlaylistTracks(id: Long)
+    
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addTracks(items: List<PlaylistTrack>)
     @Query("""SELECT t.* FROM tracks t
