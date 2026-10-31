@@ -34,13 +34,17 @@ object EqualizerManager {
     fun bandCount(): Int = try { equalizer?.numberOfBands?.toInt() ?: 0 } catch (_: Exception) { 0 }
 
     fun bandLevelRange(): Pair<Short, Short> = try {
-        val r = equalizer?.bandLevelRange ?: shortArrayOf(-1500, 1500)
+        val r: ShortArray = equalizer?.bandLevelRange ?: shortArrayOf(-1500, 1500)
         r[0] to r[1]
-    } catch (_: Exception) { -1500 to 1500 }
+    } catch (_: Exception) {
+        (-1500).toShort() to 1500.toShort()
+    }
 
     fun getBandLevel(band: Short): Short = try {
-        equalizer?.getBandLevel(band) ?: 0
-    } catch (_: Exception) { 0 }
+        equalizer?.getBandLevel(band) ?: 0.toShort()
+    } catch (_: Exception) {
+        0.toShort()
+    }
 
     fun setBandLevel(band: Short, levelMib: Short) {
         try { equalizer?.setBandLevel(band, levelMib) } catch (_: Exception) {}
