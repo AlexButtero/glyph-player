@@ -28,9 +28,7 @@ fun SettingsScreen(vm: PlayerViewModel = viewModel()) {
 
     val appLocales = AppCompatDelegate.getApplicationLocales()
     val currentLang: String? = if (appLocales.isEmpty) null else appLocales.get(0)?.language
-    val currentLangLabel = when (currentLang) {
-        "en" -> stringResource(R.string.lang_english); "ru" -> stringResource(R.string.lang_russian); else -> stringResource(R.string.lang_system)
-    }
+    val currentLangLabel = when (currentLang) { "en" -> stringResource(R.string.lang_english); "ru" -> stringResource(R.string.lang_russian); else -> stringResource(R.string.lang_system) }
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
@@ -66,8 +64,7 @@ fun SettingsScreen(vm: PlayerViewModel = viewModel()) {
 
     if (showLang) {
         AlertDialog(
-            onDismissRequest = { showLang = false },
-            title = { Text(stringResource(R.string.settings_language), color = Color.White) },
+            onDismissRequest = { showLang = false }, title = { Text(stringResource(R.string.settings_language), color = Color.White) },
             text = {
                 Column {
                     LangOption(stringResource(R.string.lang_system), currentLang == null) { applyLocale(null); showLang = false }
@@ -75,27 +72,15 @@ fun SettingsScreen(vm: PlayerViewModel = viewModel()) {
                     LangOption(stringResource(R.string.lang_russian), currentLang == "ru") { applyLocale("ru"); showLang = false }
                 }
             },
-            confirmButton = { TextButton(onClick = { showLang = false }) { Text(stringResource(R.string.player_close), color = Color.Gray) } },
-            containerColor = Color(0xFF121212)
+            confirmButton = { TextButton(onClick = { showLang = false }) { Text(stringResource(R.string.player_close), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
 
     if (showSleep) {
         AlertDialog(
-            onDismissRequest = { showSleep = false },
-            title = { Text(stringResource(R.string.settings_sleep), color = Color.White) },
-            text = {
-                Column {
-                    listOf(0, 15, 30, 45, 60).forEach { m ->
-                        TextButton(onClick = { vm.setSleepTimer(m); showSleep = false }) {
-                            Text(if (m == 0) stringResource(R.string.settings_sleep_off) else stringResource(R.string.settings_sleep_minutes, m), color = Color.White)
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { showSleep = false }) { Text(stringResource(R.string.player_close), color = Color.Gray) } },
-            containerColor = Color(0xFF121212)
+            onDismissRequest = { showSleep = false }, title = { Text(stringResource(R.string.settings_sleep), color = Color.White) },
+            text = { Column { listOf(0, 15, 30, 45, 60).forEach { m -> TextButton(onClick = { vm.setSleepTimer(m); showSleep = false }) { Text(if (m == 0) stringResource(R.string.settings_sleep_off) else stringResource(R.string.settings_sleep_minutes, m), color = Color.White) } } } },
+            confirmButton = {}, dismissButton = { TextButton(onClick = { showSleep = false }) { Text(stringResource(R.string.player_close), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
 }
@@ -110,9 +95,7 @@ private fun LangOption(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-private fun applyLocale(tag: String?) {
-    AppCompatDelegate.setApplicationLocales(if (tag == null) LocaleListCompat.getEmptyLocaleList() else LocaleListCompat.forLanguageTags(tag))
-}
+private fun applyLocale(tag: String?) { AppCompatDelegate.setApplicationLocales(if (tag == null) LocaleListCompat.getEmptyLocaleList() else LocaleListCompat.forLanguageTags(tag)) }
 
 @Composable
 private fun SectionTitle(text: String) {
