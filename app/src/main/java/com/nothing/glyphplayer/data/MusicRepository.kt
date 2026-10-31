@@ -28,4 +28,7 @@ class MusicRepository(
 
     suspend fun tracksOf(playlistId: Long): List<Track> =
         db.playlists().tracksOf(playlistId)
+
+    suspend fun getLyrics(trackId: Long): String? = db.lyrics().getLyrics(trackId)
+    suspend fun saveLyrics(trackId: Long, text: String) = db.lyrics().saveLyrics(LyricsEntity(trackId, text))
 }
