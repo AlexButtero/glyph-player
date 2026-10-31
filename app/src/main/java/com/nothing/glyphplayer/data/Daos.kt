@@ -15,6 +15,10 @@ interface TrackDao {
     suspend fun upsert(list: List<Track>)
     @Query("DELETE FROM tracks")
     suspend fun clear()
+    @Query("DELETE FROM tracks WHERE id = :id")
+    suspend fun deleteById(id: Long)
+    @Query("UPDATE tracks SET title = :newTitle WHERE id = :id")
+    suspend fun updateTitle(id: Long, newTitle: String)
 }
 
 @Dao
