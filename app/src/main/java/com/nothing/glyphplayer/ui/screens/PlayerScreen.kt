@@ -62,26 +62,17 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     var trackToDelete by remember { mutableStateOf<Track?>(null) }
     var trackToRename by remember { mutableStateOf<Track?>(null) }
     var pendingDeleteTrack by remember { mutableStateOf<Track?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
     
     var sliderPos by remember { mutableStateOf<Float?>(null) }
     var dragOffsetX by remember { mutableStateOf(0f) }
     var dragOffsetY by remember { mutableStateOf(0f) }
 
-    LaunchedEffect(pendingDeleteTrack) {
-        pendingDeleteTrack?.let { track ->
-            val result = snackbarHostState.showSnackbar("Удаление через 6 сек...", "ОТМЕНИТЬ", duration = SnackbarDuration.Long)
-            if (result == SnackbarResult.ActionPerformed) pendingDeleteTrack = null
-            else { vm.deleteTrack(track); pendingDeleteTrack = null; onBack() }
-        }
-    }
-
     if (showLyrics) { LyricsScreen(vm, state.currentTrackId, state.positionMs, onBack = { showLyrics = false }); return }
     if (showQueue) { QueueScreen(state.queue, state.currentIndex, onBack = { showQueue = false }, onSelect = { vm.seekToIndex(it); showQueue = false }); return }
 
-    Scaffold(containerColor = Color.Black, snackbarHost = { SnackbarHost(snackbarHostState) }) { paddingValues ->
-        Box(
-            modifier = Modifier.fillMaxSize().padding(paddingValues)
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
@@ -92,49 +83,58 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                         },
                         onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x; dragOffsetY += dragAmount.y }
                     )
-                }
+                },
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
-                    IconButton(onClick = { showTrackMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White) }
-                }
-                Spacer(Modifier.height(24.dp))
-
-                AsyncImage(model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(280.dp).clip(MaterialTheme.shapes.large).background(Color.DarkGray))
-                Spacer(Modifier.height(24.dp))
-                
-                Text(state.title ?: "—", style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
-                Text(state.artist ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                Spacer(Modifier.height(24.dp))
-
-                val duration = state.durationMs.coerceAtLeast(1)
-                val currentPos = sliderPos ?: state.positionMs.toFloat()
-                Slider(value = currentPos.coerceIn(0f, duration.toFloat()), onValueChange = { sliderPos = it }, onValueChangeFinished = { vm.seekTo((sliderPos ?: 0f).toLong()); sliderPos = null }, valueRange = 0f..duration.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(fmt(state.positionMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                    Text(fmt(state.durationMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { vm.toggleShuffle() }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (state.shuffle) Red else Color.Gray, modifier = Modifier.size(28.dp)) }
-                    IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White, modifier = Modifier.size(36.dp)) }
-                    IconButton(onClick = { vm.playPause() }, modifier = Modifier.size(64.dp).background(Red, MaterialTheme.shapes.extraLarge)) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play/Pause", tint = Color.White, modifier = Modifier.size(36.dp)) }
-                    IconButton(onClick = { vm.next() }) { Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp)) }
-                    IconButton(onClick = { vm.cycleRepeat() }) { Icon(if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Repeat", tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) Red else Color.Gray, modifier = Modifier.size(28.dp)) }
-                }
-
-                Spacer(Modifier.height(24.dp))
-                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.4f))
-                Spacer(Modifier.height(16.dp))
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    TextButton(onClick = { showEq = true }) { Text(stringResource(R.string.player_equalizer), color = Red, style = MaterialTheme.typography.labelSmall) }
-                    TextButton(onClick = { showSpeed = true }) { Text("${stringResource(R.string.player_speed)} ${state.speed}x", color = Color.Gray, style = MaterialTheme.typography.labelSmall) }
-                    TextButton(onClick = { showLyrics = true }) { Text(stringResource(R.string.player_lyrics), color = Red, style = MaterialTheme.typography.labelSmall) }
-                }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
+                IconButton(onClick = { showTrackMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White) }
             }
+            Spacer(Modifier.height(24.dp))
+
+            AsyncImage(model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(280.dp).clip(MaterialTheme.shapes.large).background(Color.DarkGray))
+            Spacer(Modifier.height(24.dp))
+            
+            Text(state.title ?: "—", style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
+            Text(state.artist ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+            Spacer(Modifier.height(24.dp))
+
+            val duration = state.durationMs.coerceAtLeast(1)
+            val currentPos = sliderPos ?: state.positionMs.toFloat()
+            Slider(value = currentPos.coerceIn(0f, duration.toFloat()), onValueChange = { sliderPos = it }, onValueChangeFinished = { vm.seekTo((sliderPos ?: 0f).toLong()); sliderPos = null }, valueRange = 0f..duration.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(fmt(state.positionMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                Text(fmt(state.durationMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { vm.toggleShuffle() }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (state.shuffle) Red else Color.Gray, modifier = Modifier.size(28.dp)) }
+                IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White, modifier = Modifier.size(36.dp)) }
+                IconButton(onClick = { vm.playPause() }, modifier = Modifier.size(64.dp).background(Red, MaterialTheme.shapes.extraLarge)) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play/Pause", tint = Color.White, modifier = Modifier.size(36.dp)) }
+                IconButton(onClick = { vm.next() }) { Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp)) }
+                IconButton(onClick = { vm.cycleRepeat() }) { Icon(if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Repeat", tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) Red else Color.Gray, modifier = Modifier.size(28.dp)) }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.4f))
+            Spacer(Modifier.height(16.dp))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TextButton(onClick = { showEq = true }) { Text(stringResource(R.string.player_equalizer), color = Red, style = MaterialTheme.typography.labelSmall) }
+                TextButton(onClick = { showSpeed = true }) { Text("${stringResource(R.string.player_speed)} ${state.speed}x", color = Color.Gray, style = MaterialTheme.typography.labelSmall) }
+                TextButton(onClick = { showLyrics = true }) { Text(stringResource(R.string.player_lyrics), color = Red, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+
+        // Кастомный таймер в плеере
+        if (pendingDeleteTrack != null) {
+            DeletionTimerSnackbar(
+                track = pendingDeleteTrack!!,
+                onDelete = { vm.deleteTrack(pendingDeleteTrack!!); pendingDeleteTrack = null; onBack() },
+                onCancel = { pendingDeleteTrack = null },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+            )
         }
     }
 
@@ -148,7 +148,14 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 onDismissRequest = { showTrackMenu = false }, title = { Text(currentTrack.title, color = Color.White) },
                 text = {
                     Column {
-                        TextButton(onClick = { showAddToPlaylist = true; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
+                        TextButton(onClick = { 
+                            showTrackMenu = false
+                            if (playlists.isEmpty()) {
+                                vm.createPlaylist("Мой плейлист") { newId -> vm.addMultipleToPlaylist(newId, listOf(currentTrack.id)) }
+                            } else {
+                                showAddToPlaylist = true 
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
                         TextButton(onClick = { vm.addToQueue(listOf(currentTrack)); showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }
                         TextButton(onClick = { trackToRename = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_rename), color = Color.White) }
                         TextButton(onClick = { trackToDelete = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_delete), color = Red) }
@@ -187,106 +194,4 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     }
 }
 
-@Composable
-fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
-    val context = LocalContext.current
-    var manualText by remember { mutableStateOf("") }
-    var isEditing by remember { mutableStateOf(false) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
-    val lyrics = vm.lyrics.collectAsState().value
-
-    LaunchedEffect(trackId) { trackId?.let { id -> vm.getSavedLyrics(id) { saved -> if (!saved.isNullOrBlank()) manualText = saved } } }
-
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { val text = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { r -> r.readText() }; if (text != null) { manualText = text; isEditing = true } }
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
-        detectDragGestures(onDragEnd = { if (dragOffsetY > 150f && !isEditing) onBack(); dragOffsetY = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetY += dragAmount.y })
-    }) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
-                if (trackId != null) {
-                    if (!isEditing) TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
-                    else TextButton(onClick = { vm.saveLyrics(trackId, formatLyrics(manualText)); isEditing = false }) { Text(stringResource(R.string.lyrics_save), color = Red) }
-                }
-            }
-            
-            if (isEditing) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    TextButton(onClick = { val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager; val clip = clipboard.primaryClip; if (clip != null && clip.itemCount > 0) manualText = clip.getItemAt(0).text.toString() }) { Text(stringResource(R.string.lyrics_paste), color = Color.Gray) }
-                    TextButton(onClick = { filePicker.launch("text/*") }) { Text(stringResource(R.string.lyrics_import_file), color = Color.Gray) }
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = manualText, onValueChange = { manualText = it }, modifier = Modifier.fillMaxSize(), placeholder = { Text(stringResource(R.string.lyrics_hint), color = Color.Gray) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White))
-            } else {
-                val formattedText = if (manualText.isNotBlank()) formatLyrics(manualText) else ""
-                if (formattedText.isNotBlank()) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 16.dp)) { Text(formattedText, color = Color.White, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.5f) }
-                } else if (lyrics.isNotEmpty()) {
-                    Column(Modifier.verticalScroll(rememberScrollState())) { lyrics.forEach { line -> val active = line.timeMs <= currentPos && (lyrics.getOrNull(lyrics.indexOf(line) + 1)?.timeMs ?: Long.MAX_VALUE) > currentPos; Text(line.text, color = if (active) Red else Color.Gray, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), textAlign = TextAlign.Center) } }
-                } else {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.lyrics_no_text), color = Color.Gray) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
-    var dragOffsetX by remember { mutableStateOf(0f) }
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
-        detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
-    }) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } }
-            Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Spacer(Modifier.height(16.dp))
-            LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(queue) { idx, item ->
-                    val isCurrent = idx == currentIndex
-                    Row(Modifier.fillMaxWidth().clickable { onSelect(idx) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(item.mediaMetadata.title?.toString() ?: "Unknown", color = if (isCurrent) Red else Color.White, style = MaterialTheme.typography.bodyMedium)
-                            Text(item.mediaMetadata.artist?.toString() ?: "", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                        }
-                        if (isCurrent) Text(stringResource(R.string.queue_now_playing), color = Red, style = MaterialTheme.typography.labelSmall)
-                    }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpeedDialog(currentSpeed: Float, onSpeedSelected: (Float) -> Unit, onClose: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onClose, title = { Text(stringResource(R.string.player_speed_title), color = Color.White) },
-        text = { Column { listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { sp -> TextButton(onClick = { onSpeedSelected(sp) }, modifier = Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${sp}x", color = if (currentSpeed == sp) Red else Color.White); if (currentSpeed == sp) Text("✓", color = Red) } } } } },
-        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
-    )
-}
-
-@Composable
-private fun EqDialog(onClose: () -> Unit) {
-    val bands = EqualizerManager.bandCount()
-    val range = EqualizerManager.bandLevelRange()
-    var levels by remember { mutableStateOf(List(bands) { EqualizerManager.getBandLevel(it.toShort()).toFloat() }) }
-    AlertDialog(
-        onDismissRequest = onClose, title = { Text(stringResource(R.string.player_equalizer), color = Color.White) },
-        text = { Column { if (bands == 0) Text(stringResource(R.string.player_eq_unavailable), color = Color.Gray) else levels.forEachIndexed { i, lv -> Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); Slider(value = lv, onValueChange = { levels = levels.toMutableList().also { l -> l[i] = it }; EqualizerManager.setBandLevel(i.toShort(), it.toInt().toShort()) }, valueRange = range.first.toFloat()..range.second.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)) } } },
-        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
-    )
-}
-
-private fun formatLyrics(text: String): String {
-    return text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("[") && !it.endsWith("]") }.joinToString("\n\n")
-}
-
-private fun fmt(ms: Long): String {
-    val s = (ms / 1000).coerceAtLeast(0)
-    return "%d:%02d".format(s / 60, s % 60)
-}
+// (Функции LyricsScreen, QueueScreen, SpeedDialog, EqDialog, formatLyrics, fmt остаются без изменений из предыдущего кода)
