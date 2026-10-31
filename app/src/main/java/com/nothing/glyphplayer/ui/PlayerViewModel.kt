@@ -175,6 +175,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun deletePlaylist(id: Long) { scope.launch { repo.deletePlaylist(id) } }
     fun addMultipleToPlaylist(playlistId: Long, trackIds: List<Long>) { scope.launch { repo.addToPlaylist(playlistId, trackIds) } }
     fun playPlaylist(playlistId: Long) { scope.launch { val tracks = repo.tracksOf(playlistId); if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0) } } }
+    
+    // ДОБАВЛЕНО: Публичный метод для получения треков плейлиста
+    fun getPlaylistTracks(playlistId: Long, onResult: (List<Track>) -> Unit) {
+        scope.launch {
+            val tracks = repo.tracksOf(playlistId)
+            withContext(Dispatchers.Main) { onResult(tracks) }
+        }
+    }
+
     fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) { scope.launch { withContext(Dispatchers.Main) { onResult(repo.getLyrics(trackId)) } } }
     fun saveLyrics(trackId: Long, text: String) { scope.launch { repo.saveLyrics(trackId, text) } }
 
