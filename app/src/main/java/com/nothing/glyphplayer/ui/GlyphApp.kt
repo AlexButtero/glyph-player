@@ -1,0 +1,76 @@
+package com.nothing.glyphplayer.ui
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.nothing.glyphplayer.ui.components.MiniPlayer
+import com.nothing.glyphplayer.ui.screens.HomeScreen
+import com.nothing.glyphplayer.ui.screens.LibraryScreen
+import com.nothing.glyphplayer.ui.screens.PlayerScreen
+import com.nothing.glyphplayer.ui.screens.SettingsScreen
+import com.nothing.glyphplayer.ui.theme.Red
+
+@Composable
+fun GlyphApp() {
+    val nav = rememberNavController()
+    var tab by remember { mutableStateOf(0) }
+    val tabs = listOf("HOME", "PLAYER", "LIBRARY", "SETTINGS")
+
+    Scaffold(
+        containerColor = Color.Black,
+        bottomBar = {
+            Column {
+                MiniPlayer()
+                NavigationBar(containerColor = Color.Black) {
+                    tabs.forEachIndexed { i, label ->
+                        NavigationBarItem(
+                            selected = tab == i,
+                            onClick = {
+                                tab = i
+                                nav.navigate(label) {
+                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                }
+                            },
+                            icon = {
+                                Text(
+                                    label.take(1),
+                                    color = if (tab == i) Red else Color.Gray,
+                                    textAlign = TextAlign.Center
+                                )
+                            },
+                            label = {
+                                Text(label, color = if (tab == i) Red else Color.Gray)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    ) { pad ->
+        Box(Modifier.fillMaxSize().padding(pad)) {
+            NavHost(nav, startDestination = "HOME") {
+                composable("HOME") { HomeScreen() }
+                composable("PLAYER") { PlayerScreen() }
+                composable("LIBRARY") { LibraryScreen() }
+                composable("SETTINGS") { SettingsScreen() }
+            }
+        }
+    }
+}
