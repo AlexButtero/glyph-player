@@ -243,7 +243,14 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         AlertDialog(
             onDismissRequest = { trackToRename = null }, title = { Text(stringResource(R.string.dialog_rename_title), color = Color.White) },
             text = { OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) },
-            confirmButton = { TextButton(onClick = { if (newTitle.isNotBlank()) { vm.renameTrack(track.id, newTitle); trackToRename = null } }) { Text(stringResource(R.string.action_save), color = Red) } },
+            confirmButton = { 
+                TextButton(onClick = { 
+                    if (newTitle.isNotBlank()) { 
+                        vm.renameTrack(track, newTitle) // ИСПРАВЛЕНО
+                        trackToRename = null 
+                    } 
+                }) { Text(stringResource(R.string.action_save), color = Red) } 
+            },
             dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
