@@ -170,7 +170,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun scanLibrary(onDone: (Int) -> Unit) { scope.launch { val n = repo.scanLibrary(); withContext(Dispatchers.Main) { onDone(n) } } }
     fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
-    fun renameTrack(id: Long, newTitle: String) { scope.launch { repo.renameTrack(id, newTitle) } }
+    
+    fun renameTrack(track: Track, newTitle: String) { 
+        scope.launch { repo.renameTrack(track, newTitle) } 
+    }
     
     fun createPlaylist(name: String, onDone: (Long) -> Unit = {}) { 
         scope.launch { val id = repo.createPlaylist(name); withContext(Dispatchers.Main) { onDone(id) } } 
