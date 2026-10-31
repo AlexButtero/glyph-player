@@ -1,6 +1,7 @@
 package com.nothing.glyphplayer.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -13,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -72,7 +73,12 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                         if (openedPlaylist!!.posterUri != null) {
                             AsyncImage(model = openedPlaylist!!.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         } else {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_fallback_music),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
                         }
                     }
                     Spacer(Modifier.width(16.dp))
@@ -87,15 +93,22 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                 
                 Spacer(Modifier.height(16.dp))
                 LazyColumn(Modifier.fillMaxSize()) {
-                    // ОПТИМИЗАЦИЯ: ключ
                     items(playlistTracks, key = { it.id }) { track ->
                         Row(Modifier.fillMaxWidth().clickable { 
                             vm.playTracks(playlistTracks, playlistTracks.indexOf(track))
                             onPlaylistClick() 
                         }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)).background(Surface), contentAlignment = Alignment.Center) {
-                                if (track.artUri != null) AsyncImage(model = track.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                else Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                if (track.artUri != null) {
+                                    AsyncImage(model = track.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                } else {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_fallback_music),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                             Spacer(Modifier.width(12.dp))
                             Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
@@ -116,7 +129,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
             Spacer(Modifier.height(16.dp))
             
             LazyColumn(Modifier.fillMaxSize()) {
-                // ОПТИМИЗАЦИЯ: ключ
                 items(playlists, key = { it.id }) { p ->
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
@@ -139,8 +151,16 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                     ) {
                         Row(Modifier.fillMaxWidth().background(Color.Black).clickable { openedPlaylist = p }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface), contentAlignment = Alignment.Center) {
-                                if (p.posterUri != null) AsyncImage(model = p.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                else Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray)
+                                if (p.posterUri != null) {
+                                    AsyncImage(model = p.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                } else {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_fallback_music),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                             Spacer(Modifier.width(12.dp))
                             Text(p.name, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
@@ -182,7 +202,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     }
 
     if (playlistToEdit != null) {
-        // ИСПОЛЬЗУЕМ ОБЩИЙ ДИАЛОГ
         PlaylistEditorDialog(
             initialName = playlistToEdit!!.name,
             initialDesc = playlistToEdit!!.description ?: "",
@@ -196,7 +215,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
     }
 
     if (showCreate) {
-        // ИСПОЛЬЗУЕМ ОБЩИЙ ДИАЛОГ
         PlaylistEditorDialog(
             onSave = { name, desc, poster ->
                 vm.createPlaylist(name, desc, poster)
