@@ -94,7 +94,12 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             }
             Spacer(Modifier.height(24.dp))
 
-            AsyncImage(model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(280.dp).clip(MaterialTheme.shapes.large).background(Color.DarkGray))
+            AsyncImage(
+                model = state.artUri ?: R.drawable.ic_fallback_music, // ИСПОЛЬЗУЕМ ЗАГЛУШКУ
+                contentDescription = null, 
+                contentScale = ContentScale.Crop, 
+                modifier = Modifier.size(280.dp).clip(MaterialTheme.shapes.large).background(Color.DarkGray)
+            )
             Spacer(Modifier.height(24.dp))
             
             Text(state.title ?: "—", style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
