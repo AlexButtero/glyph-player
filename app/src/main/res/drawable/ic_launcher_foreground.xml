@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Большой черный круг -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,50 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
+        
+    <!-- Красный треугольник Play (по центру круга) -->
+    <path
+        android:fillColor="#D71921"
+        android:pathData="M42,32 L68,50 L42,68 Z" />
+        
+    <!-- Черная полоса снизу (глиф) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M16,90 L92,90 L92,94 L16,94 Z" />
+        
+    <!-- Красная точка на полосе -->
+    <path
+        android:fillColor="#D71921"
+        android:pathData="M26,92 m-7,0 a7,7 0 1,1 14,0 a7,7 0 1,1 -14,0" />
+</vector>
