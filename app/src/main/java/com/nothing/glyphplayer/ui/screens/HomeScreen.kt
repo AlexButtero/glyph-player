@@ -22,8 +22,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 
@@ -31,7 +34,7 @@ import com.nothing.glyphplayer.ui.theme.Red
 fun HomeScreen(vm: PlayerViewModel = viewModel()) {
     val lib by vm.library.collectAsState()
     var prompt by remember { mutableStateOf("") }
-    var scannedMsg by remember { mutableStateOf<String?>(null) }
+    var foundCount by remember { mutableStateOf<Int?>(null) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -40,31 +43,32 @@ fun HomeScreen(vm: PlayerViewModel = viewModel()) {
     ) {
         Text("GLYPH PLAYER", style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(8.dp))
-        Text("offline • nothing os style", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        Text(stringResource(R.string.home_subtitle),
+            style = MaterialTheme.typography.labelSmall, color = Color.Gray)
         Spacer(Modifier.height(32.dp))
-        Text("${lib.size} треков в библиотеке",
+        Text(pluralStringResource(R.plurals.home_track_count, lib.size, lib.size),
             style = MaterialTheme.typography.bodyMedium, color = Color.White)
         Spacer(Modifier.height(24.dp))
 
         Button(
-            onClick = { vm.scanLibrary { n -> scannedMsg = "Найдено: $n" } },
+            onClick = { vm.scanLibrary { n -> foundCount = n } },
             colors = ButtonDefaults.buttonColors(containerColor = Red),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("SCAN LIBRARY") }
+        ) { Text(stringResource(R.string.home_scan)) }
 
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = { vm.queueMyWave() },
             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("MY WAVE ▶") }
+        ) { Text(stringResource(R.string.home_my_wave)) }
 
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(
             value = prompt,
             onValueChange = { prompt = it },
-            placeholder = { Text("sad / workout / chill / rain", color = Color.Gray) },
-            label = { Text("PROMPT", color = Color.Gray) },
+            placeholder = { Text(stringResource(R.string.home_prompt_hint), color = Color.Gray) },
+            label = { Text(stringResource(R.string.home_prompt_label), color = Color.Gray) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Red,
                 unfocusedBorderColor = Color.DarkGray,
@@ -78,11 +82,16 @@ fun HomeScreen(vm: PlayerViewModel = viewModel()) {
             onClick = { if (prompt.isNotBlank()) vm.playPrompted(prompt) },
             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("BUILD PLAYLIST") }
+        ) { Text(stringResource(R.string.home_build_playlist)) }
 
-        if (scannedMsg != null) {
+        val fc = foundCount
+        if (fc != null) {
             Spacer(Modifier.height(16.dp))
-            Text(scannedMsg ?: "", color = Red, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                pluralStringResource(R.plurals.home_found, fc, fc),
+                color = Red,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
