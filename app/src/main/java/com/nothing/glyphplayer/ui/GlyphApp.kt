@@ -50,13 +50,7 @@ fun GlyphApp() {
                     tabs.forEachIndexed { i, (route, label) ->
                         NavigationBarItem(
                             selected = tab == i,
-                            onClick = {
-                                tab = i
-                                nav.navigate(route) {
-                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                }
-                            },
+                            onClick = { tab = i; nav.navigate(route) { popUpTo(nav.graph.startDestinationId) { saveState = true }; launchSingleTop = true } },
                             icon = { Box(Modifier) },
                             label = { Text(label, color = if (tab == i) Red else Color.Gray, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal) }
                         )
