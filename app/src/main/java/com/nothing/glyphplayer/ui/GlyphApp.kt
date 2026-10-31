@@ -22,8 +22,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.ui.components.MiniPlayer
+import com.nothing.glyphplayer.ui.screens.ArtistsScreen
 import com.nothing.glyphplayer.ui.screens.LibraryScreen
-import com.nothing.glyphplayer.ui.screens.MyWaveScreen
 import com.nothing.glyphplayer.ui.screens.PlayerScreen
 import com.nothing.glyphplayer.ui.screens.PlaylistsScreen
 import com.nothing.glyphplayer.ui.screens.SettingsScreen
@@ -36,7 +36,7 @@ fun GlyphApp() {
     
     val tabs = listOf(
         "LIBRARY" to stringResource(R.string.nav_library),
-        "MY_WAVE" to stringResource(R.string.nav_my_wave),
+        "ARTISTS" to stringResource(R.string.nav_artists),
         "PLAYLISTS" to stringResource(R.string.nav_playlists),
         "SETTINGS" to stringResource(R.string.nav_settings)
     )
@@ -68,7 +68,7 @@ fun GlyphApp() {
         Box(Modifier.fillMaxSize().padding(pad)) {
             NavHost(nav, startDestination = "LIBRARY") {
                 composable("LIBRARY") { LibraryScreen(onTrackClick = { nav.navigate("PLAYER") }) }
-                composable("MY_WAVE") { MyWaveScreen(onTrackClick = { nav.navigate("PLAYER") }) }
+                composable("ARTISTS") { ArtistsScreen(onTrackClick = { nav.navigate("PLAYER") }) }
                 composable("PLAYLISTS") { PlaylistsScreen(onPlaylistClick = { nav.navigate("PLAYER") }) }
                 composable("SETTINGS") { SettingsScreen() }
                 composable("PLAYER") { PlayerScreen(onBack = { nav.popBackStack() }) }
