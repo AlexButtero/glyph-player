@@ -57,7 +57,9 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     var showLyrics by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showTrackMenu by remember { mutableStateOf(false) }
+    
     var showAddToPlaylist by remember { mutableStateOf(false) }
+    var showCreateFromAdd by remember { mutableStateOf(false) }
     
     var trackToDelete by remember { mutableStateOf<Track?>(null) }
     var trackToRename by remember { mutableStateOf<Track?>(null) }
@@ -149,11 +151,8 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     Column {
                         TextButton(onClick = { 
                             showTrackMenu = false
-                            if (playlists.isEmpty()) {
-                                vm.createPlaylist("Мой плейлист") { newId -> vm.addMultipleToPlaylist(newId, listOf(currentTrack.id)) }
-                            } else {
-                                showAddToPlaylist = true 
-                            }
+                            selectedTracks = listOf(currentTrack.id) // Re-use state trick
+                            showAddToPlaylist = true 
                         }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
                         TextButton(onClick = { vm.addToQueue(listOf(currentTrack)); showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }
                         TextButton(onClick = { trackToRename = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_rename), color = Color.White) }
@@ -165,12 +164,32 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         }
     }
     
-    if (showAddToPlaylist && playlists.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { showAddToPlaylist = false }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
-            text = { Column { playlists.forEach { p -> TextButton(onClick = { state.currentTrackId?.let { vm.addMultipleToPlaylist(p.id, listOf(it)) }; showAddToPlaylist = false }) { Text(p.name, color = Color.White) } } } },
-            confirmButton = {}, dismissButton = { TextButton(onClick = { showAddToPlaylist = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
-        )
+    if (showAddToPlaylist) {
+        if (showCreateFromAdd) {
+            PlaylistEditorDialog(
+                initialName = "",
+                onSave = { name, desc, poster ->
+                    val trackToAdd = state.currentTrackId
+                    vm.createPlaylist(name, desc, poster) { newId ->
+                        if (trackToAdd != null) vm.addMultipleToPlaylist(newId, listOf(trackToAdd))
+                    }
+                    showAddToPlaylist = false
+                    showCreateFromAdd = false
+                },
+                onDismiss = { showCreateFromAdd = false }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showAddToPlaylist = false }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
+                text = { 
+                    Column { 
+                        playlists.forEach { p -> TextButton(onClick = { state.currentTrackId?.let { vm.addMultipleToPlaylist(p.id, listOf(it)) }; showAddToPlaylist = false }) { Text(p.name, color = Color.White) } }
+                        TextButton(onClick = { showCreateFromAdd = true }) { Text("+ Создать новый", color = Red) }
+                    } 
+                },
+                confirmButton = {}, dismissButton = { TextButton(onClick = { showAddToPlaylist = false; showCreateFromAdd = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+            )
+        }
     }
 
     trackToRename?.let { track ->
@@ -181,7 +200,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             confirmButton = { 
                 TextButton(onClick = { 
                     if (newTitle.isNotBlank()) { 
-                        vm.renameTrack(track, newTitle) // ИСПРАВЛЕНО
+                        vm.renameTrack(track, newTitle)
                         trackToRename = null 
                     } 
                 }) { Text(stringResource(R.string.action_save), color = Red) } 
@@ -199,6 +218,9 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         )
     }
 }
+
+// Вспомогательная переменная для переиспользования в PlayerScreen
+var selectedTracks by mutableStateOf(listOf<Long>())
 
 @Composable
 fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
