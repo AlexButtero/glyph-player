@@ -25,8 +25,11 @@ fun String.normalizeArtist(): String {
 @Composable
 fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     val lib by vm.library.collectAsState()
-    val grouped = lib.groupBy { it.artist.normalizeArtist() }
-    val sortedArtists = grouped.keys.sorted()
+    
+    // ОПТИМИЗАЦИЯ: группировка вычисляется только при изменении библиотеки
+    val grouped = remember(lib) { lib.groupBy { it.artist.normalizeArtist() } }
+    val sortedArtists = remember(grouped) { grouped.keys.sorted() }
+    
     var selectedArtist by remember { mutableStateOf<String?>(null) }
 
     if (selectedArtist != null) {
@@ -38,7 +41,7 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(16.dp))
         LazyColumn(Modifier.fillMaxSize()) {
-            items(sortedArtists) { artistKey ->
+            items(sortedArtists, key = { it }) { artistKey ->
                 val displayName = grouped[artistKey]?.firstOrNull()?.artist ?: artistKey
                 val trackCount = grouped[artistKey]?.size ?: 0
                 Row(Modifier.fillMaxWidth().clickable { selectedArtist = artistKey }.padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -62,7 +65,7 @@ fun ArtistTracksScreen(artistName: String, tracks: List<Track>, onBack: () -> Un
             Text(artistName, style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
             LazyColumn(Modifier.fillMaxSize()) {
-                items(tracks) { track ->
+                items(tracks, key = { it.id }) { track ->
                     Row(Modifier.fillMaxWidth().clickable { vm.playTracks(tracks, tracks.indexOf(track)); onTrackClick() }.padding(vertical = 12.dp)) {
                         Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     }
