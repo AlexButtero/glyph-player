@@ -179,7 +179,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun playNext(tracks: List<Track>) {
         val c = controller ?: return
         val current = c.currentMediaItemIndex
-        c.insertMediaItems(current + 1, tracks.map { it.toMediaItem() })
+        // ИСПРАВЛЕНО: используем addMediaItems с индексом
+        c.addMediaItems(current + 1, tracks.map { it.toMediaItem() })
     }
 
     fun shuffleAll() {
