@@ -52,6 +52,9 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     var sortMode by remember { mutableStateOf(3) }
     var showSortMenu by remember { mutableStateOf(false) }
     
+    var isShuffled by remember { mutableStateOf(false) }
+    var shuffleOrder by remember { mutableStateOf<List<Long>>(emptyList()) }
+    
     var selectedTracks by remember { mutableStateOf(listOf<Long>()) }
     var showAddToPlaylist by remember { mutableStateOf(false) }
     var showMenuForTrack by remember { mutableStateOf<Track?>(null) }
@@ -62,15 +65,20 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     
     var showCreateFromAdd by remember { mutableStateOf(false) }
 
-    val filtered = remember(lib, search, sortMode) {
-        lib.filter {
+    val filtered = remember(lib, search, sortMode, isShuffled, shuffleOrder) {
+        val filteredList = lib.filter {
             search.isBlank() || it.title.contains(search, true) || it.artist.contains(search, true)
-        }.let {
+        }
+        
+        if (isShuffled && shuffleOrder.isNotEmpty()) {
+            val orderMap = shuffleOrder.withIndex().associate { it.value to it.index }
+            filteredList.sortedBy { orderMap[it.id] ?: Int.MAX_VALUE }
+        } else {
             when (sortMode) {
-                1 -> it.sortedBy { t -> t.title }
-                2 -> it.sortedBy { t -> t.artist }
-                3 -> it.sortedByDescending { t -> t.dateAdded }
-                else -> it
+                1 -> filteredList.sortedBy { t -> t.title }
+                2 -> filteredList.sortedBy { t -> t.artist }
+                3 -> filteredList.sortedByDescending { t -> t.dateAdded }
+                else -> filteredList
             }
         }
     }
@@ -103,8 +111,10 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(8.dp)
                 )
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    // ИСПРАВЛЕНО: убран onTrackClick()
-                    TextButton(onClick = { vm.shuffleAll() }) { 
+                    TextButton(onClick = { 
+                        isShuffled = true
+                        shuffleOrder = lib.map { it.id }.shuffled()
+                    }) { 
                         Icon(Icons.Default.Shuffle, contentDescription = null, tint = Red, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.lib_shuffle), color = Red, style = MaterialTheme.typography.bodyMedium) 
@@ -112,10 +122,10 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                     Box {
                         TextButton(onClick = { showSortMenu = true }) { Text("${stringResource(R.string.lib_sort)} ▼", color = Red) }
                         DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }, containerColor = Color(0xFF1E1E1E)) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_date_newest), color = Color.White) }, onClick = { sortMode = 3; showSortMenu = false })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_default), color = Color.White) }, onClick = { sortMode = 0; showSortMenu = false })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_title), color = Color.White) }, onClick = { sortMode = 1; showSortMenu = false })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_artist), color = Color.White) }, onClick = { sortMode = 2; showSortMenu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_date_newest), color = Color.White) }, onClick = { sortMode = 3; isShuffled = false; showSortMenu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_default), color = Color.White) }, onClick = { sortMode = 0; isShuffled = false; showSortMenu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_title), color = Color.White) }, onClick = { sortMode = 1; isShuffled = false; showSortMenu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_artist), color = Color.White) }, onClick = { sortMode = 2; isShuffled = false; showSortMenu = false })
                         }
                     }
                 }
@@ -151,20 +161,14 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                 Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // ИСПРАВЛЕНО: проверяем на null и пустоту
-                                if (!track.artUri.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = track.artUri, contentDescription = null,
-                                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.ic_fallback_music),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
+                                AsyncImage(
+                                    model = track.artUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                    placeholder = painterResource(id = R.drawable.ic_fallback_music),
+                                    error = painterResource(id = R.drawable.ic_fallback_music)
+                                )
                             }
                             
                             Spacer(Modifier.width(12.dp))
