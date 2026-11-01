@@ -1,9 +1,9 @@
 package com.nothing.glyphplayer.ui.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -39,13 +39,14 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.small)) {
-                if (!state.artUri.isNullOrBlank()) {
-                    AsyncImage(model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else {
-                    Image(painter = painterResource(id = R.drawable.ic_fallback_music), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                }
-            }
+            AsyncImage(
+                model = state.artUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small),
+                placeholder = painterResource(id = R.drawable.ic_fallback_music),
+                error = painterResource(id = R.drawable.ic_fallback_music)
+            )
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Text(state.title ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(state.artist ?: "", style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -54,6 +55,10 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
                 IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White) }
                 IconButton(onClick = { vm.playPause() }) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play/Pause", tint = Red) }
                 IconButton(onClick = { vm.next() }) { Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White) }
+                // НОВАЯ КНОПКА ЗАКРЫТИЯ
+                IconButton(onClick = { vm.stopAndClear() }) { 
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray, modifier = Modifier.size(20.dp)) 
+                }
             }
         }
         LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, color = Red, trackColor = Surface, modifier = Modifier.fillMaxWidth().height(2.dp))
