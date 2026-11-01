@@ -16,6 +16,7 @@ import androidx.media3.session.SessionToken
 import com.nothing.glyphplayer.GlyphPlayerApp
 import com.nothing.glyphplayer.data.Playlist
 import com.nothing.glyphplayer.data.Track
+import com.nothing.glyphplayer.playback.EqualizerManager
 import com.nothing.glyphplayer.playback.LyricLine
 import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.playback.PlayerService
@@ -187,19 +188,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
         if (currentIndex == -1) return
         
-        // Перемешиваем очередь, сохраняя текущий трек на его месте
         items.removeAt(currentIndex)
         items.shuffle()
         val insertIndex = currentIndex.coerceAtMost(items.size)
         items.add(insertIndex, currentItem)
         
-        // Обновляем очередь в плеере
         c.setMediaItems(items, insertIndex, currentPos)
         if (wasPlaying) c.play()
         
-        // Мгновенно обновляем UI
         refresh()
-        
         _state.value = _state.value.copy(shuffle = !_state.value.shuffle)
     }
 
@@ -235,6 +232,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun addToQueue(tracks: List<Track>) { controller?.addMediaItems(tracks.map { it.toMediaItem() }) }
     fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
     fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
+
+    // ДОБАВЛЕНО: Принудительное подключение эквалайзера
+    fun forceAttachEqualizer() {
+        val c = controller ?: return
+        val sessionId = c.audioSessionId
+        if (sessionId != 0) {
+            EqualizerManager.attach(sessionId)
+        }
+    }
 
     fun scanLibrary(onDone: (Int) -> Unit) { 
         scope.launch { 
