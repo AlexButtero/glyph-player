@@ -315,8 +315,9 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             }
 
             LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(displayQueue, key = { _, item -> item.mediaId }) { uiIndex, item ->
-                    val realIndex = if (queue.isNotEmpty()) (currentIndex + uiIndex) % queue.size else 0
+                // УБРАН key, чтобы избежать краша при дубликатах в очереди
+                itemsIndexed(displayQueue) { uiIndex, item ->
+                    val realIndex = if (queue.isNotEmpty()) (currentIndex.coerceAtLeast(0) + uiIndex) % queue.size else 0
                     val isCurrent = uiIndex == 0 
 
                     Row(Modifier.fillMaxWidth().clickable { onSelect(realIndex) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
