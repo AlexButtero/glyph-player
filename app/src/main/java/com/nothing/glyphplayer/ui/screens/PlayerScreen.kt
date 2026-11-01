@@ -84,7 +84,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
-                            // Свайп вправо закрывает плеер, влево открывает очередь, вверх открывает текст
                             if (dragOffsetX > 150f) onBack()
                             else if (dragOffsetX < -150f) showQueue = true
                             else if (dragOffsetY < -150f) showLyrics = true
@@ -251,7 +250,6 @@ fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: 
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
-            // Свайп слева направо закрывает текст
             detectHorizontalDragGestures(
                 onDragEnd = { 
                     if (dragOffsetX > 150f && !isEditing) onBack()
@@ -304,10 +302,25 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } }
             Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
+            
+            // Визуальный поворот списка, чтобы текущий трек был наверху
+            val displayQueue = remember(queue, currentIndex) {
+                if (queue.isNotEmpty() && currentIndex in queue.indices) {
+                    val firstPart = queue.subList(currentIndex, queue.size).toList()
+                    val secondPart = queue.subList(0, currentIndex).toList()
+                    firstPart + secondPart
+                } else {
+                    queue
+                }
+            }
+
             LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(queue, key = { _, item -> item.mediaId }) { idx, item ->
-                    val isCurrent = idx == currentIndex
-                    Row(Modifier.fillMaxWidth().clickable { onSelect(idx) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                itemsIndexed(displayQueue, key = { _, item -> item.mediaId }) { uiIndex, item ->
+                    // Так как текущий трек теперь первый (uiIndex=0), определяем реальный индекс для плеера
+                    val realIndex = if (queue.isNotEmpty()) (currentIndex + uiIndex) % queue.size else 0
+                    val isCurrent = uiIndex == 0 
+
+                    Row(Modifier.fillMaxWidth().clickable { onSelect(realIndex) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(item.mediaMetadata.title?.toString() ?: "Unknown", color = if (isCurrent) Red else Color.White, style = MaterialTheme.typography.bodyMedium)
                             Text(item.mediaMetadata.artist?.toString() ?: "", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
@@ -342,7 +355,7 @@ private fun EqDialog(onClose: () -> Unit) {
         text = { 
             Column { 
                 if (!isAvailable) {
-                    Text("Эквалайзер недоступен. Включите любой трек, чтобы активировать аудиосессию.", color = Color.Gray)
+                    Text("Эквалайзер недоступен. Возможно ваше устройство не поддерживает встроенный эквалайзер.", color = Color.Gray)
                 } else {
                     levels.forEachIndexed { i, lv -> 
                         Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); 
