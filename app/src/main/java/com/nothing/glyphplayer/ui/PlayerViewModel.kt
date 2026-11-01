@@ -57,6 +57,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _lyrics = MutableStateFlow<List<LyricLine>>(emptyList())
     val lyrics: StateFlow<List<LyricLine>> = _lyrics
+    
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning
 
     private var controller: MediaController? = null
     private var pollJob: Job? = null
@@ -90,7 +93,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
             title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
             artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = _state.value.shuffle, // Не берем из контроллера, так как мы делаем физический шаффл
+            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = _state.value.shuffle,
             repeatMode = c.repeatMode, speed = c.playbackParameters.speed,
             queue = q, currentIndex = c.currentMediaItemIndex
         )
@@ -144,7 +147,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
         if (items.isEmpty()) return
         
-        // Физически перемешиваем очередь, сохраняя текущий трек на первом месте
+        c.pause() // Пауза предотвращает затык при пересборке
         items.remove(currentItem)
         items.shuffle()
         items.add(0, currentItem)
@@ -182,7 +185,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
     fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
 
-    fun scanLibrary(onDone: (Int) -> Unit) { scope.launch { val n = repo.scanLibrary(); withContext(Dispatchers.Main) { onDone(n) } } }
+    fun scanLibrary(onDone: (Int) -> Unit) { 
+        scope.launch { 
+            _isScanning.value = true
+            val n = repo.scanLibrary()
+            _isScanning.value = false
+            withContext(Dispatchers.Main) { onDone(n) } 
+        } 
+    }
+    
     fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
     fun renameTrack(track: Track, newTitle: String) { scope.launch { repo.renameTrack(track, newTitle) } }
     
