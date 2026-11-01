@@ -84,6 +84,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
+                            // Свайп вправо закрывает плеер, влево открывает очередь, вверх открывает текст
                             if (dragOffsetX > 150f) onBack()
                             else if (dragOffsetX < -150f) showQueue = true
                             else if (dragOffsetY < -150f) showLyrics = true
@@ -118,7 +119,13 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 
             val duration = state.durationMs.coerceAtLeast(1)
             val currentPos = sliderPos ?: state.positionMs.toFloat()
-            Slider(value = currentPos.coerceIn(0f, duration.toFloat()), onValueChange = { sliderPos = it }, onValueChangeFinished = { vm.seekTo((sliderPos ?: 0f).toLong()); sliderPos = null }, valueRange = 0f..duration.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red))
+            Slider(
+                value = currentPos.coerceIn(0f, duration.toFloat()), 
+                onValueChange = { sliderPos = it }, 
+                onValueChangeFinished = { vm.seekTo((sliderPos ?: 0f).toLong()); sliderPos = null }, 
+                valueRange = 0f..duration.toFloat(), 
+                colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(fmt(state.positionMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 Text(fmt(state.durationMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
@@ -154,7 +161,12 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         }
     }
 
-    if (showEq) EqDialog(onClose = { showEq = false })
+    if (showEq) {
+        // Принудительное подключение эквалайзера перед открытием
+        LaunchedEffect(Unit) { vm.forceAttachEqualizer() }
+        EqDialog(onClose = { showEq = false })
+    }
+    
     if (showSpeed) SpeedDialog(currentSpeed = state.speed, onSpeedSelected = { vm.setSpeed(it); showSpeed = false }, onClose = { showSpeed = false })
     
     if (showTrackMenu) {
@@ -231,7 +243,9 @@ fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: 
     var dragOffsetX by remember { mutableStateOf(0f) }
     val lyrics = vm.lyrics.collectAsState().value
 
-    LaunchedEffect(trackId) { trackId?.let { id -> vm.getSavedLyrics(id) { saved -> if (!saved.isNullOrBlank()) manualText = saved } } }
+    LaunchedEffect(trackId) { 
+        trackId?.let { id -> vm.getSavedLyrics(id) { saved -> if (!saved.isNullOrBlank()) manualText = saved } } 
+    }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { val text = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { r -> r.readText() }; if (text != null) { manualText = text; isEditing = true } }
@@ -239,6 +253,7 @@ fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: 
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+            // Свайп слева направо закрывает текст
             detectHorizontalDragGestures(
                 onDragEnd = { 
                     if (dragOffsetX > 150f && !isEditing) onBack()
