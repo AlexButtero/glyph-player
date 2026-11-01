@@ -13,8 +13,8 @@ android {
         applicationId = "com.nothing.glyphplayer"
         minSdk = 31
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 7
+        versionName = "1.7.0"
     }
 
     buildTypes {
@@ -41,6 +41,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.6")
     implementation("androidx.navigation:navigation-compose:2.8.1")
 
     implementation("androidx.media3:media3-exoplayer:1.4.1")
@@ -51,5 +52,6 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    implementation("io.coil-kt:coil:2.7.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
 }
