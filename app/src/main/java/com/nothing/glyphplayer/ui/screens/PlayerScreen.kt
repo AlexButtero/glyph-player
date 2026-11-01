@@ -292,7 +292,8 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
             LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(queue) { idx, item ->
+                // ИСПРАВЛЕНО: добавлен key для мгновенной перерисовки
+                itemsIndexed(queue, key = { _, item -> item.mediaId }) { idx, item ->
                     val isCurrent = idx == currentIndex
                     Row(Modifier.fillMaxWidth().clickable { onSelect(idx) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
