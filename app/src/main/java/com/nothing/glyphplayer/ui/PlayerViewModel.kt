@@ -11,6 +11,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.source.DefaultShuffleOrder
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.nothing.glyphplayer.GlyphPlayerApp
@@ -94,18 +95,19 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val item = c.currentMediaItem
         val isShuffle = c.shuffleModeEnabled
         
-        // Собираем очередь для UI на основе перемешанного Timeline
         val q = mutableListOf<MediaItem>()
         var uiCurrentIndex = 0
         
         if (isShuffle) {
             val timeline = c.currentTimeline
-            val period = Timeline.Period()
-            for (i in 0 until timeline.periodCount) {
-                val windowIndex = timeline.getPeriod(i, period).windowIndex
-                q.add(c.getMediaItemAt(windowIndex))
+            if (!timeline.isEmpty) {
+                val period = Timeline.Period()
+                for (i in 0 until timeline.periodCount) {
+                    val windowIndex = timeline.getPeriod(i, period).windowIndex
+                    q.add(c.getMediaItemAt(windowIndex))
+                }
+                uiCurrentIndex = c.currentPeriodIndex
             }
-            uiCurrentIndex = c.currentPeriodIndex
         } else {
             q.addAll((0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) })
             uiCurrentIndex = c.currentMediaItemIndex
@@ -159,7 +161,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun prev() { controller?.seekToPreviousMediaItem() }
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
     
-    // ИСПРАВЛЕНО: Правильный поиск индекса в перемешанном списке
     fun seekToIndex(uiIndex: Int) {
         val c = controller ?: return
         if (c.shuffleModeEnabled) {
@@ -175,12 +176,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     
-    // ИСПРАВЛЕНО: Используем встроенный механизм
     fun toggleShuffle() {
-        controller?.let { 
-            it.shuffleModeEnabled = !it.shuffleModeEnabled 
-            refresh()
+        val c = controller ?: return
+        val newState = !c.shuffleModeEnabled
+        c.shuffleModeEnabled = newState
+        if (newState) {
+            // Принудительно генерируем новый случайный порядок
+            try {
+                c.setShuffleOrder(DefaultShuffleOrder(c.mediaItemCount, System.currentTimeMillis()))
+            } catch (_: Exception) {}
         }
+        refresh() // Обновляем UI
     }
 
     fun stopAndClear() {
