@@ -84,8 +84,9 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
-                            if (dragOffsetX < -150f) showQueue = true
-                            else if (dragOffsetY > 150f) onBack()
+                            // ИЗМЕНЕНО: Свайп вправо закрывает, влево - очередь, вверх - текст
+                            if (dragOffsetX > 150f) onBack()
+                            else if (dragOffsetX < -150f) showQueue = true
                             else if (dragOffsetY < -150f) showLyrics = true
                             dragOffsetX = 0f; dragOffsetY = 0f
                         },
@@ -292,7 +293,6 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
             LazyColumn(Modifier.fillMaxSize()) {
-                // ИСПРАВЛЕНО: добавлен key для мгновенной перерисовки
                 itemsIndexed(queue, key = { _, item -> item.mediaId }) { idx, item ->
                     val isCurrent = idx == currentIndex
                     Row(Modifier.fillMaxWidth().clickable { onSelect(idx) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
