@@ -50,6 +50,7 @@ import com.nothing.glyphplayer.ui.theme.Red
 @Composable
 fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     val state by vm.state.collectAsState()
+    val positionMs by vm.positionMs.collectAsState()
     val lyrics by vm.lyrics.collectAsState()
     val lib by vm.library.collectAsState()
     val playlists by vm.playlists.collectAsState()
@@ -72,7 +73,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     var dragOffsetY by remember { mutableStateOf(0f) }
 
     if (showLyrics) { 
-        LyricsScreen(vm, state.currentTrackId, state.positionMs, onBack = { showLyrics = false }); return 
+        LyricsScreen(vm, state.currentTrackId, positionMs, onBack = { showLyrics = false }); return 
     }
     if (showQueue) { 
         QueueScreen(state.queue, state.currentIndex, onBack = { showQueue = false }, onSelect = { vm.seekToIndex(it); showQueue = false }); return 
@@ -117,7 +118,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
 
             val duration = state.durationMs.coerceAtLeast(1)
-            val currentPos = sliderPos ?: state.positionMs.toFloat()
+            val currentPos = sliderPos ?: positionMs.toFloat()
             Slider(
                 value = currentPos.coerceIn(0f, duration.toFloat()), 
                 onValueChange = { sliderPos = it }, 
@@ -126,7 +127,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(fmt(state.positionMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                Text(fmt(positionMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 Text(fmt(state.durationMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             }
 
@@ -303,7 +304,6 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
             
-            // Визуальный поворот списка, чтобы текущий трек был наверху
             val displayQueue = remember(queue, currentIndex) {
                 if (queue.isNotEmpty() && currentIndex in queue.indices) {
                     val firstPart = queue.subList(currentIndex, queue.size).toList()
@@ -316,7 +316,6 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
 
             LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(displayQueue, key = { _, item -> item.mediaId }) { uiIndex, item ->
-                    // Так как текущий трек теперь первый (uiIndex=0), определяем реальный индекс для плеера
                     val realIndex = if (queue.isNotEmpty()) (currentIndex + uiIndex) % queue.size else 0
                     val isCurrent = uiIndex == 0 
 
@@ -355,7 +354,7 @@ private fun EqDialog(onClose: () -> Unit) {
         text = { 
             Column { 
                 if (!isAvailable) {
-                    Text("Эквалайзер недоступен. Возможно ваше устройство не поддерживает встроенный эквалайзер.", color = Color.Gray)
+                    Text("Эквалайзер недоступен. Включите любой трек, чтобы активировать аудиосессию.", color = Color.Gray)
                 } else {
                     levels.forEachIndexed { i, lv -> 
                         Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); 
