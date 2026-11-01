@@ -30,9 +30,10 @@ import com.nothing.glyphplayer.ui.theme.Surface
 @Composable
 fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
     val state by vm.state.collectAsState()
+    val positionMs by vm.positionMs.collectAsState()
     if (state.title == null) return
 
-    val progress = if (state.durationMs > 0) state.positionMs.toFloat() / state.durationMs else 0f
+    val progress = if (state.durationMs > 0) positionMs.toFloat() / state.durationMs else 0f
 
     Column(
         Modifier.fillMaxWidth().height(64.dp).clickable { onClick() }.padding(horizontal = 12.dp),
@@ -55,7 +56,6 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
                 IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White) }
                 IconButton(onClick = { vm.playPause() }) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play/Pause", tint = Red) }
                 IconButton(onClick = { vm.next() }) { Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White) }
-                // НОВАЯ КНОПКА ЗАКРЫТИЯ
                 IconButton(onClick = { vm.stopAndClear() }) { 
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray, modifier = Modifier.size(20.dp)) 
                 }
