@@ -1,5 +1,6 @@
 package com.nothing.glyphplayer.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,12 +39,13 @@ fun MiniPlayer(vm: PlayerViewModel = viewModel(), onClick: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            AsyncImage(
-                model = state.artUri ?: R.drawable.ic_fallback_music, // ИСПОЛЬЗУЕМ ЗАГЛУШКУ
-                contentDescription = null, 
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small)
-            )
+            Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.small)) {
+                if (!state.artUri.isNullOrBlank()) {
+                    AsyncImage(model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Image(painter = painterResource(id = R.drawable.ic_fallback_music), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                }
+            }
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Text(state.title ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(state.artist ?: "", style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
