@@ -50,7 +50,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val context = app.applicationContext
     private val scope = viewModelScope
 
-    // Настройки для первого запуска
     private val prefs = context.getSharedPreferences("glyph_prefs", Context.MODE_PRIVATE)
     private var isFirstLaunch = prefs.getBoolean("is_first_launch", true)
 
@@ -143,6 +142,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
     fun seekToIndex(index: Int) { controller?.seekToDefaultPosition(index); controller?.play() }
     
+    // ДОБАВЛЕНО: Полная остановка и очистка
+    fun stopAndClear() {
+        controller?.stop()
+        controller?.clearMediaItems()
+        _state.value = PlaybackState() // Мгновенный сброс интерфейса
+    }
+
     fun toggleShuffle() {
         val c = controller ?: return
         val currentItem = c.currentMediaItem ?: return
@@ -155,7 +161,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
         if (currentIndex == -1) return
         
-        // Перемешиваем очередь, сохраняя текущий трек на его месте
         items.removeAt(currentIndex)
         items.shuffle()
         val insertIndex = currentIndex.coerceAtMost(items.size)
