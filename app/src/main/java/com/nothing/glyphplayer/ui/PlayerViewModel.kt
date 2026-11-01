@@ -71,6 +71,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
     private var lastBackPressTime = 0L
+    
+    // Храним исходную очередь для возврата при выключении шаффла
+    private var originalQueue: List<MediaItem> = emptyList()
 
     init { connect() }
 
@@ -92,33 +95,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun refresh() {
         val c = controller ?: return
         val item = c.currentMediaItem
-        val isShuffle = c.shuffleModeEnabled
         
-        val q = mutableListOf<MediaItem>()
-        var uiCurrentIndex = 0
-        
-        if (isShuffle) {
-            val timeline = c.currentTimeline
-            if (!timeline.isEmpty) {
-                val period = Timeline.Period()
-                for (i in 0 until timeline.periodCount) {
-                    val windowIndex = timeline.getPeriod(i, period).windowIndex
-                    q.add(c.getMediaItemAt(windowIndex))
-                }
-                uiCurrentIndex = c.currentPeriodIndex
-            }
-        } else {
-            q.addAll((0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) })
-            uiCurrentIndex = c.currentMediaItemIndex
-        }
+        // Собираем текущую очередь из контроллера (порядок может быть изменен)
+        val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
         
         _state.value = _state.value.copy(
             isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
             title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
             artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = isShuffle,
+            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = _state.value.shuffle, // берем из нашего стейта
             repeatMode = c.repeatMode, speed = c.playbackParameters.speed,
-            queue = q, currentIndex = uiCurrentIndex
+            queue = q, currentIndex = c.currentMediaItemIndex
         )
         
         val newId = _state.value.currentTrackId
@@ -150,6 +137,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         val items = tracks.map { it.toMediaItem() }
         if (items.isEmpty()) return
+        
+        originalQueue = items // Сохраняем оригинальный порядок
+        _state.value = _state.value.copy(shuffle = false) // Сбрасываем шаффл при новом запуске
+        
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
         c.prepare()
         c.play()
@@ -162,17 +153,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     
     fun seekToIndex(uiIndex: Int) {
         val c = controller ?: return
-        if (c.shuffleModeEnabled) {
-            val timeline = c.currentTimeline
-            if (uiIndex in 0 until timeline.periodCount) {
-                val windowIndex = timeline.getPeriod(uiIndex, Timeline.Period()).windowIndex
-                c.seekToDefaultPosition(windowIndex)
-                c.play()
-            }
-        } else {
-            c.seekToDefaultPosition(uiIndex)
-            c.play()
-        }
+        c.seekToDefaultPosition(uiIndex)
+        c.play()
     }
     
     fun toggleShuffle() {
@@ -181,27 +163,40 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val currentPos = c.currentPosition
         val wasPlaying = c.isPlaying
         
-        val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
-        if (items.isEmpty()) return
+        val isCurrentlyShuffle = _state.value.shuffle
+        val newShuffleState = !isCurrentlyShuffle
         
-        val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
-        if (currentIndex == -1) return
+        if (newShuffleState) {
+            // Включаем шаффл: перемешиваем, сохраняя текущий трек
+            if (originalQueue.isEmpty()) return
+            val items = originalQueue.toMutableList()
+            val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
+            if (currentIndex != -1) {
+                items.removeAt(currentIndex)
+                items.shuffle()
+                val insertIndex = currentIndex.coerceAtMost(items.size)
+                items.add(insertIndex, currentItem)
+                c.setMediaItems(items, insertIndex, currentPos)
+            }
+        } else {
+            // Выключаем шаффл: возвращаем исходную очередь
+            if (originalQueue.isEmpty()) return
+            val items = originalQueue
+            val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
+            if (currentIndex != -1) {
+                c.setMediaItems(items, currentIndex, currentPos)
+            }
+        }
         
-        items.removeAt(currentIndex)
-        items.shuffle()
-        val insertIndex = currentIndex.coerceAtMost(items.size)
-        items.add(insertIndex, currentItem)
-        
-        c.setMediaItems(items, insertIndex, currentPos)
         if (wasPlaying) c.play()
-        
+        _state.value = _state.value.copy(shuffle = newShuffleState)
         refresh()
-        _state.value = _state.value.copy(shuffle = !_state.value.shuffle)
     }
 
     fun stopAndClear() {
         controller?.stop()
         controller?.clearMediaItems()
+        originalQueue = emptyList()
         _state.value = PlaybackState()
     }
 
@@ -228,8 +223,25 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun addToQueue(tracks: List<Track>) { controller?.addMediaItems(tracks.map { it.toMediaItem() }) }
-    fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
+    fun addToQueue(tracks: List<Track>) { 
+        val c = controller ?: return
+        val items = tracks.map { it.toMediaItem() }
+        c.addMediaItems(items)
+        originalQueue = originalQueue + items // Обновляем оригинальную очередь
+    }
+    
+    fun playNext(tracks: List<Track>) { 
+        val c = controller ?: return
+        val items = tracks.map { it.toMediaItem() }
+        val insertIndex = c.currentMediaItemIndex + 1
+        c.addMediaItems(insertIndex, items)
+        
+        // Вставляем в оригинальную очередь
+        val mutableOriginal = originalQueue.toMutableList()
+        mutableOriginal.addAll(insertIndex.coerceAtMost(mutableOriginal.size), items)
+        originalQueue = mutableOriginal
+    }
+    
     fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
 
     fun scanLibrary(onDone: (Int) -> Unit) { 
