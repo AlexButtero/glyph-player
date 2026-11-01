@@ -96,7 +96,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         val item = c.currentMediaItem
         
-        // Собираем текущую очередь из контроллера (порядок может быть изменен нами вручную)
+        // Собираем текущую очередь из контроллера
         val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
         
         _state.value = _state.value.copy(
@@ -175,7 +175,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val items = originalQueue.shuffled().toMutableList()
             val newCurrentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
             if (newCurrentIndex != -1) {
+                // Мгновенно обновляем UI
+                _state.value = _state.value.copy(queue = items, currentIndex = newCurrentIndex)
+                
                 c.setMediaItems(items, newCurrentIndex, currentPos)
+                c.prepare() // Обязательно готовим плеер к новой очереди
             }
         } else {
             // Выключаем шаффл, возвращаем исходную очередь
@@ -183,12 +187,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val items = originalQueue
             val newCurrentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
             if (newCurrentIndex != -1) {
+                // Мгновенно обновляем UI
+                _state.value = _state.value.copy(queue = items, currentIndex = newCurrentIndex)
+                
                 c.setMediaItems(items, newCurrentIndex, currentPos)
+                c.prepare() // Обязательно готовим плеер к новой очереди
             }
         }
         
         if (wasPlaying) c.play()
-        refresh() // Обновляем UI
     }
 
     fun stopAndClear() {
