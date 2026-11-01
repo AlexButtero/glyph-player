@@ -95,13 +95,9 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
             isRefreshing = isRefreshing,
             onRefresh = {
                 isRefreshing = true
-                // Сбрасываем сортировки
                 sortMode = 3
                 isShuffled = false
-                // Запускаем сканирование
-                vm.scanLibrary { 
-                    isRefreshing = false 
-                }
+                vm.scanLibrary { isRefreshing = false }
             },
             state = pullToRefreshState,
             modifier = Modifier.fillMaxSize()
