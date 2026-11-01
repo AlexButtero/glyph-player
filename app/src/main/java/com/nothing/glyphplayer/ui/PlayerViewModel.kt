@@ -16,7 +16,6 @@ import androidx.media3.session.SessionToken
 import com.nothing.glyphplayer.GlyphPlayerApp
 import com.nothing.glyphplayer.data.Playlist
 import com.nothing.glyphplayer.data.Track
-import com.nothing.glyphplayer.playback.EqualizerManager
 import com.nothing.glyphplayer.playback.LyricLine
 import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.playback.PlayerService
@@ -232,15 +231,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun addToQueue(tracks: List<Track>) { controller?.addMediaItems(tracks.map { it.toMediaItem() }) }
     fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
     fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
-
-    // ДОБАВЛЕНО: Принудительное подключение эквалайзера
-    fun forceAttachEqualizer() {
-        val c = controller ?: return
-        val sessionId = c.audioSessionId
-        if (sessionId != 0) {
-            EqualizerManager.attach(sessionId)
-        }
-    }
 
     fun scanLibrary(onDone: (Int) -> Unit) { 
         scope.launch { 
