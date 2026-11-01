@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.nothing.glyphplayer.GlyphPlayerApp
@@ -91,15 +92,32 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun refresh() {
         val c = controller ?: return
         val item = c.currentMediaItem
-        val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
+        val isShuffle = c.shuffleModeEnabled
+        
+        // Собираем очередь для UI на основе перемешанного Timeline
+        val q = mutableListOf<MediaItem>()
+        var uiCurrentIndex = 0
+        
+        if (isShuffle) {
+            val timeline = c.currentTimeline
+            val period = Timeline.Period()
+            for (i in 0 until timeline.periodCount) {
+                val windowIndex = timeline.getPeriod(i, period).windowIndex
+                q.add(c.getMediaItemAt(windowIndex))
+            }
+            uiCurrentIndex = c.currentPeriodIndex
+        } else {
+            q.addAll((0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) })
+            uiCurrentIndex = c.currentMediaItemIndex
+        }
         
         _state.value = _state.value.copy(
             isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
             title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
             artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = _state.value.shuffle,
+            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = isShuffle,
             repeatMode = c.repeatMode, speed = c.playbackParameters.speed,
-            queue = q, currentIndex = c.currentMediaItemIndex
+            queue = q, currentIndex = uiCurrentIndex
         )
         
         val newId = _state.value.currentTrackId
@@ -140,36 +158,35 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun next() { controller?.seekToNextMediaItem() }
     fun prev() { controller?.seekToPreviousMediaItem() }
     fun seekTo(ms: Long) { controller?.seekTo(ms) }
-    fun seekToIndex(index: Int) { controller?.seekToDefaultPosition(index); controller?.play() }
     
-    // ДОБАВЛЕНО: Полная остановка и очистка
+    // ИСПРАВЛЕНО: Правильный поиск индекса в перемешанном списке
+    fun seekToIndex(uiIndex: Int) {
+        val c = controller ?: return
+        if (c.shuffleModeEnabled) {
+            val timeline = c.currentTimeline
+            if (uiIndex in 0 until timeline.periodCount) {
+                val windowIndex = timeline.getPeriod(uiIndex, Timeline.Period()).windowIndex
+                c.seekToDefaultPosition(windowIndex)
+                c.play()
+            }
+        } else {
+            c.seekToDefaultPosition(uiIndex)
+            c.play()
+        }
+    }
+    
+    // ИСПРАВЛЕНО: Используем встроенный механизм
+    fun toggleShuffle() {
+        controller?.let { 
+            it.shuffleModeEnabled = !it.shuffleModeEnabled 
+            refresh()
+        }
+    }
+
     fun stopAndClear() {
         controller?.stop()
         controller?.clearMediaItems()
-        _state.value = PlaybackState() // Мгновенный сброс интерфейса
-    }
-
-    fun toggleShuffle() {
-        val c = controller ?: return
-        val currentItem = c.currentMediaItem ?: return
-        val currentPos = c.currentPosition
-        val wasPlaying = c.isPlaying
-        
-        val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
-        if (items.isEmpty()) return
-        
-        val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
-        if (currentIndex == -1) return
-        
-        items.removeAt(currentIndex)
-        items.shuffle()
-        val insertIndex = currentIndex.coerceAtMost(items.size)
-        items.add(insertIndex, currentItem)
-        
-        c.setMediaItems(items, insertIndex, currentPos)
-        if (wasPlaying) c.play()
-        
-        _state.value = _state.value.copy(shuffle = !_state.value.shuffle)
+        _state.value = PlaybackState()
     }
 
     fun cycleRepeat() {
@@ -197,6 +214,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addToQueue(tracks: List<Track>) { controller?.addMediaItems(tracks.map { it.toMediaItem() }) }
     fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
+    fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
 
     fun scanLibrary(onDone: (Int) -> Unit) { 
         scope.launch { 
