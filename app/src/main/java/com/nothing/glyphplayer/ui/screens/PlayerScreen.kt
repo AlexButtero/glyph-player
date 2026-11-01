@@ -101,11 +101,14 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
 
             Box(Modifier.size(280.dp).clip(MaterialTheme.shapes.large).background(Color.DarkGray)) {
-                if (!state.artUri.isNullOrBlank()) {
-                    AsyncImage(model = state.artUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else {
-                    Image(painter = painterResource(id = R.drawable.ic_fallback_music), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                }
+                AsyncImage(
+                    model = state.artUri, 
+                    contentDescription = null, 
+                    contentScale = ContentScale.Crop, 
+                    modifier = Modifier.fillMaxSize(),
+                    placeholder = painterResource(id = R.drawable.ic_fallback_music),
+                    error = painterResource(id = R.drawable.ic_fallback_music)
+                )
             }
             Spacer(Modifier.height(24.dp))
             
