@@ -5,27 +5,31 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Масштабируем на 65% и центрируем с ровными отступами -->
+    <!-- Увеличиваем масштаб до 75% для лучшего заполнения -->
     <group
-        android:scaleX="0.65"
-        android:scaleY="0.65"
-        android:translateX="18.9"
-        android:translateY="18.9">
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:translateX="13.5"
+        android:translateY="13.5">
         
+        <!-- Черный круг (r=22) -->
         <path
             android:fillColor="#000000"
             android:pathData="M54,54 m-22,0 a22,22 0 1,1 44,0 a22,22 0 1,1 -44,0" />
             
+        <!-- Красный треугольник Play -->
         <path
             android:fillColor="#D71921"
             android:pathData="M49,44 L65,54 L49,64 Z" />
             
+        <!-- Черная полоса (теперь чуть шире круга: от 30 до 78) -->
         <path
             android:fillColor="#000000"
-            android:pathData="M28,82 L80,82 L80,84 L28,84 Z" />
+            android:pathData="M30,82 L78,82 L78,84 L30,84 Z" />
             
+        <!-- Красная точка (сдвинута) -->
         <path
             android:fillColor="#D71921"
-            android:pathData="M34,83 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0" />
+            android:pathData="M36,83 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0" />
     </group>
 </vector>
