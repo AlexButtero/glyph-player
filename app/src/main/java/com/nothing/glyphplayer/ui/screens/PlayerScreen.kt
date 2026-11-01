@@ -4,10 +4,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -238,7 +238,7 @@ fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: 
     val context = LocalContext.current
     var manualText by remember { mutableStateOf("") }
     var isEditing by remember { mutableStateOf(false) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
+    var dragOffsetX by remember { mutableStateOf(0f) }
     val lyrics = vm.lyrics.collectAsState().value
 
     LaunchedEffect(trackId) { trackId?.let { id -> vm.getSavedLyrics(id) { saved -> if (!saved.isNullOrBlank()) manualText = saved } } }
@@ -247,9 +247,21 @@ fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: 
         uri?.let { val text = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { r -> r.readText() }; if (text != null) { manualText = text; isEditing = true } }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
-        detectDragGestures(onDragEnd = { if (dragOffsetY > 150f && !isEditing) onBack(); dragOffsetY = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetY += dragAmount.y })
-    }) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+            // ИСПОЛЬЗУЕМ ГОРИЗОНТАЛЬНЫЙ СВАЙП
+            detectHorizontalDragGestures(
+                onDragEnd = { 
+                    if (dragOffsetX > 150f && !isEditing) onBack()
+                    dragOffsetX = 0f 
+                },
+                onHorizontalDrag = { change, dragAmount -> 
+                    change.consume()
+                    dragOffsetX += dragAmount 
+                }
+            )
+        }
+    ) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
