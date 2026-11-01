@@ -12,6 +12,8 @@ class PlayerService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        EqualizerManager.init(this) // Инициализация настроек эквалайзера
+
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(
                 AudioAttributes.Builder()
