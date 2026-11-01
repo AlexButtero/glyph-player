@@ -2,6 +2,7 @@ package com.nothing.glyphplayer.ui
 
 import android.app.Application
 import android.content.ComponentName
+import android.content.Context
 import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -48,6 +49,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as GlyphPlayerApp).repository
     private val context = app.applicationContext
     private val scope = viewModelScope
+
+    // Настройки для первого запуска
+    private val prefs = context.getSharedPreferences("glyph_prefs", Context.MODE_PRIVATE)
+    private var isFirstLaunch = prefs.getBoolean("is_first_launch", true)
 
     val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
     val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
@@ -147,12 +152,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
         if (items.isEmpty()) return
         
-        c.pause() // Пауза предотвращает затык при пересборке
-        items.remove(currentItem)
-        items.shuffle()
-        items.add(0, currentItem)
+        val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
+        if (currentIndex == -1) return
         
-        c.setMediaItems(items, 0, currentPos)
+        // Перемешиваем очередь, сохраняя текущий трек на его месте
+        items.removeAt(currentIndex)
+        items.shuffle()
+        val insertIndex = currentIndex.coerceAtMost(items.size)
+        items.add(insertIndex, currentItem)
+        
+        c.setMediaItems(items, insertIndex, currentPos)
         if (wasPlaying) c.play()
         
         _state.value = _state.value.copy(shuffle = !_state.value.shuffle)
@@ -183,13 +192,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addToQueue(tracks: List<Track>) { controller?.addMediaItems(tracks.map { it.toMediaItem() }) }
     fun playNext(tracks: List<Track>) { controller?.let { it.addMediaItems(it.currentMediaItemIndex + 1, tracks.map { t -> t.toMediaItem() }) } }
-    fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
 
     fun scanLibrary(onDone: (Int) -> Unit) { 
         scope.launch { 
-            _isScanning.value = true
+            if (isFirstLaunch) _isScanning.value = true
             val n = repo.scanLibrary()
-            _isScanning.value = false
+            if (isFirstLaunch) {
+                _isScanning.value = false
+                isFirstLaunch = false
+                prefs.edit().putBoolean("is_first_launch", false).apply()
+            }
             withContext(Dispatchers.Main) { onDone(n) } 
         } 
     }
