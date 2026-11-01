@@ -84,7 +84,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
-                            // ИЗМЕНЕНО: Свайп вправо закрывает, влево - очередь, вверх - текст
                             if (dragOffsetX > 150f) onBack()
                             else if (dragOffsetX < -150f) showQueue = true
                             else if (dragOffsetY < -150f) showLyrics = true
@@ -321,11 +320,24 @@ private fun SpeedDialog(currentSpeed: Float, onSpeedSelected: (Float) -> Unit, o
 @Composable
 private fun EqDialog(onClose: () -> Unit) {
     val bands = EqualizerManager.bandCount()
+    val isAvailable = EqualizerManager.isAvailable()
     val range = EqualizerManager.bandLevelRange()
     var levels by remember { mutableStateOf(List(bands) { EqualizerManager.getBandLevel(it.toShort()).toFloat() }) }
+    
     AlertDialog(
         onDismissRequest = onClose, title = { Text(stringResource(R.string.player_equalizer), color = Color.White) },
-        text = { Column { if (bands == 0) Text(stringResource(R.string.player_eq_unavailable), color = Color.Gray) else levels.forEachIndexed { i, lv -> Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); Slider(value = lv, onValueChange = { levels = levels.toMutableList().also { l -> l[i] = it }; EqualizerManager.setBandLevel(i.toShort(), it.toInt().toShort()) }, valueRange = range.first.toFloat()..range.second.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)) } } },
+        text = { 
+            Column { 
+                if (!isAvailable) {
+                    Text("Эквалайзер недоступен. Включите любой трек, чтобы активировать аудиосессию.", color = Color.Gray)
+                } else {
+                    levels.forEachIndexed { i, lv -> 
+                        Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); 
+                        Slider(value = lv, onValueChange = { levels = levels.toMutableList().also { l -> l[i] = it }; EqualizerManager.setBandLevel(i.toShort(), it.toInt().toShort()) }, valueRange = range.first.toFloat()..range.second.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)) 
+                    } 
+                }
+            }
+        },
         confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
     )
 }
