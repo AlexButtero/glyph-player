@@ -96,7 +96,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         val item = c.currentMediaItem
         
-        // Собираем текущую очередь из контроллера (порядок может быть изменен)
+        // Собираем текущую очередь из контроллера (порядок может быть изменен нами вручную)
         val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
         
         _state.value = _state.value.copy(
@@ -141,6 +141,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         originalQueue = items // Сохраняем оригинальный порядок
         _state.value = _state.value.copy(shuffle = false) // Сбрасываем шаффл при новом запуске
         
+        c.shuffleModeEnabled = false // Отключаем нативный шаффл
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
         c.prepare()
         c.play()
@@ -163,34 +164,31 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val currentPos = c.currentPosition
         val wasPlaying = c.isPlaying
         
-        val isCurrentlyShuffle = _state.value.shuffle
-        val newShuffleState = !isCurrentlyShuffle
-        
+        val newShuffleState = !_state.value.shuffle
+        _state.value = _state.value.copy(shuffle = newShuffleState) // Мгновенно обновляем кнопку
+
+        c.shuffleModeEnabled = false // Принудительно отключаем нативный шаффл
+
         if (newShuffleState) {
-            // Включаем шаффл: перемешиваем, сохраняя текущий трек
+            // Включаем шаффл
             if (originalQueue.isEmpty()) return
-            val items = originalQueue.toMutableList()
-            val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
-            if (currentIndex != -1) {
-                items.removeAt(currentIndex)
-                items.shuffle()
-                val insertIndex = currentIndex.coerceAtMost(items.size)
-                items.add(insertIndex, currentItem)
-                c.setMediaItems(items, insertIndex, currentPos)
+            val items = originalQueue.shuffled().toMutableList()
+            val newCurrentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
+            if (newCurrentIndex != -1) {
+                c.setMediaItems(items, newCurrentIndex, currentPos)
             }
         } else {
-            // Выключаем шаффл: возвращаем исходную очередь
+            // Выключаем шаффл, возвращаем исходную очередь
             if (originalQueue.isEmpty()) return
             val items = originalQueue
-            val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
-            if (currentIndex != -1) {
-                c.setMediaItems(items, currentIndex, currentPos)
+            val newCurrentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
+            if (newCurrentIndex != -1) {
+                c.setMediaItems(items, newCurrentIndex, currentPos)
             }
         }
         
         if (wasPlaying) c.play()
-        _state.value = _state.value.copy(shuffle = newShuffleState)
-        refresh()
+        refresh() // Обновляем UI
     }
 
     fun stopAndClear() {
@@ -238,7 +236,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         
         // Вставляем в оригинальную очередь
         val mutableOriginal = originalQueue.toMutableList()
-        mutableOriginal.addAll(insertIndex.coerceAtMost(mutableOriginal.size), items)
+        val currentId = c.currentMediaItem?.mediaId
+        val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
+        if (originalCurrentIndex != -1) {
+            mutableOriginal.addAll(originalCurrentIndex + 1, items)
+        } else {
+            mutableOriginal.addAll(items)
+        }
         originalQueue = mutableOriginal
     }
     
