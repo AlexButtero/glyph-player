@@ -6,6 +6,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -25,9 +28,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 data class PlaybackState(
     val isPlaying: Boolean = false,
@@ -36,7 +41,6 @@ data class PlaybackState(
     val artist: String? = null,
     val artUri: String? = null,
     val durationMs: Long = 0,
-    val positionMs: Long = 0,
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val speed: Float = 1f,
@@ -59,6 +63,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
 
+    // ОТДЕЛЬНЫЙ поток для позиции — не вызывает перерисовку тяжелых экранов
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs
+
     private val _lyrics = MutableStateFlow<List<LyricLine>>(emptyList())
     val lyrics: StateFlow<List<LyricLine>> = _lyrics
     
@@ -70,11 +78,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
     private var lastBackPressTime = 0L
-    
-    // Храним исходную очередь для возврата при выключении шаффла
+    private var lastUpdatedPosition = -1L
     private var originalQueue: List<MediaItem> = emptyList()
 
-    init { connect() }
+    init {
+        connect()
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) { startPolling() }
+            override fun onStop(owner: LifecycleOwner) { pollJob?.cancel() }
+        })
+    }
 
     private fun connect() {
         val token = SessionToken(context, ComponentName(context, PlayerService::class.java))
@@ -94,24 +107,32 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun refresh() {
         val c = controller ?: return
         val item = c.currentMediaItem
-        
-        // Собираем текущую очередь из контроллера
         val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
         
-        _state.value = _state.value.copy(
-            isPlaying = c.isPlaying, currentTrackId = item?.mediaId?.toLongOrNull(),
-            title = item?.mediaMetadata?.title?.toString(), artist = item?.mediaMetadata?.artist?.toString(),
-            artUri = item?.mediaMetadata?.artworkUri?.toString(), durationMs = c.duration.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0), shuffle = _state.value.shuffle, // берем из нашего стейта
-            repeatMode = c.repeatMode, speed = c.playbackParameters.speed,
-            queue = q, currentIndex = c.currentMediaItemIndex
-        )
+        _state.update { current ->
+            current.copy(
+                isPlaying = c.isPlaying,
+                currentTrackId = item?.mediaId?.toLongOrNull(),
+                title = item?.mediaMetadata?.title?.toString(),
+                artist = item?.mediaMetadata?.artist?.toString(),
+                artUri = item?.mediaMetadata?.artworkUri?.toString(),
+                durationMs = c.duration.coerceAtLeast(0),
+                repeatMode = c.repeatMode,
+                speed = c.playbackParameters.speed,
+                queue = q,
+                currentIndex = c.currentMediaItemIndex
+            )
+        }
         
         val newId = _state.value.currentTrackId
         if (newId != null && newId != currentLyricsTrackId) {
             currentLyricsTrackId = newId
             val uri = library.value.find { it.id == newId }?.uri
-            if (uri != null) { scope.launch { _lyrics.value = LyricsLoader.load(context, uri) } } else _lyrics.value = emptyList()
+            if (uri != null) {
+                scope.launch { _lyrics.value = LyricsLoader.load(context, uri) }
+            } else {
+                _lyrics.value = emptyList()
+            }
         }
     }
 
@@ -120,7 +141,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         pollJob = scope.launch {
             while (isActive) {
                 val c = controller ?: break
-                _state.value = _state.value.copy(positionMs = c.currentPosition.coerceAtLeast(0), durationMs = c.duration.coerceAtLeast(0))
+                val newPos = c.currentPosition.coerceAtLeast(0)
+                // Обновляем позицию только если она изменилась хотя бы на 100мс
+                if (abs(_positionMs.value - newPos) >= 100) {
+                    _positionMs.value = newPos
+                }
+                // Обновляем длительность только если она изменилась
+                val newDur = c.duration.coerceAtLeast(0)
+                if (_state.value.durationMs != newDur) {
+                    _state.update { it.copy(durationMs = newDur) }
+                }
                 delay(500)
             }
         }
@@ -137,10 +167,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val items = tracks.map { it.toMediaItem() }
         if (items.isEmpty()) return
         
-        originalQueue = items // Сохраняем оригинальный порядок
-        _state.value = _state.value.copy(shuffle = false) // Сбрасываем шаффл при новом запуске
+        originalQueue = items
+        _state.update { it.copy(shuffle = false) }
         
-        c.shuffleModeEnabled = false // Отключаем нативный шаффл
+        c.shuffleModeEnabled = false
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
         c.prepare()
         c.play()
@@ -149,7 +179,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun playPause() { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
     fun next() { controller?.seekToNextMediaItem() }
     fun prev() { controller?.seekToPreviousMediaItem() }
-    fun seekTo(ms: Long) { controller?.seekTo(ms) }
+    fun seekTo(ms: Long) { controller?.seekTo(ms); _positionMs.value = ms }
     
     fun seekToIndex(uiIndex: Int) {
         val c = controller ?: return
@@ -160,47 +190,33 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleShuffle() {
         val c = controller ?: return
         val newShuffle = !_state.value.shuffle
-        
-        // Получаем текущее состояние
         val currentItem = c.currentMediaItem ?: return
         val currentPos = c.currentPosition
         val wasPlaying = c.isPlaying
 
-        // Получаем реальную текущую очередь из плеера
         val currentQueue = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
         if (currentQueue.isEmpty()) return
 
         if (newShuffle) {
-            // Включаем шаффл: сохраняем исходную очередь и перемешиваем
             originalQueue = currentQueue.toList()
             currentQueue.shuffle()
         } else {
-            // Выключаем шаффл: возвращаем исходную очередь
             if (originalQueue.isNotEmpty()) {
                 currentQueue.clear()
                 currentQueue.addAll(originalQueue)
             }
         }
 
-        // Находим текущий трек в новом списке
         val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
         
-        // Мгновенно обновляем UI для отзывчивости
-        _state.value = _state.value.copy(
-            shuffle = newShuffle,
-            queue = currentQueue,
-            currentIndex = if (newIndex != -1) newIndex else 0
-        )
+        _state.update { it.copy(shuffle = newShuffle, queue = currentQueue, currentIndex = if (newIndex != -1) newIndex else 0) }
 
-        // Обновляем плеер
         if (newIndex != -1) {
             c.setMediaItems(currentQueue, newIndex, currentPos)
         } else {
-            // Если трек не найден (например, был добавлен динамически), ставим его в начало
             currentQueue.add(0, currentItem)
             c.setMediaItems(currentQueue, 0, currentPos)
         }
-        
         c.prepare()
         if (wasPlaying) c.play()
     }
@@ -210,6 +226,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         controller?.clearMediaItems()
         originalQueue = emptyList()
         _state.value = PlaybackState()
+        _positionMs.value = 0L
     }
 
     fun cycleRepeat() {
@@ -222,16 +239,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setSpeed(speed: Float) { controller?.setPlaybackSpeed(speed); _state.value = _state.value.copy(speed = speed) }
+    fun setSpeed(speed: Float) { controller?.setPlaybackSpeed(speed); _state.update { it.copy(speed = speed) } }
 
     fun setSleepTimer(minutes: Int) {
         sleepJob?.cancel()
-        if (minutes <= 0) { _state.value = _state.value.copy(sleepSecondsRemaining = null); return }
-        _state.value = _state.value.copy(sleepSecondsRemaining = minutes * 60)
+        if (minutes <= 0) { _state.update { it.copy(sleepSecondsRemaining = null) }; return }
+        _state.update { it.copy(sleepSecondsRemaining = minutes * 60) }
         sleepJob = scope.launch {
             var remaining = minutes * 60
-            while (remaining > 0) { delay(1000); remaining--; _state.value = _state.value.copy(sleepSecondsRemaining = remaining) }
-            controller?.pause(); _state.value = _state.value.copy(sleepSecondsRemaining = null)
+            while (remaining > 0) { delay(1000); remaining--; _state.update { it.copy(sleepSecondsRemaining = remaining) } }
+            controller?.pause(); _state.update { it.copy(sleepSecondsRemaining = null) }
         }
     }
 
@@ -239,7 +256,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         val items = tracks.map { it.toMediaItem() }
         c.addMediaItems(items)
-        originalQueue = originalQueue + items // Обновляем оригинальную очередь
+        originalQueue = originalQueue + items
     }
     
     fun playNext(tracks: List<Track>) { 
@@ -248,7 +265,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val insertIndex = c.currentMediaItemIndex + 1
         c.addMediaItems(insertIndex, items)
         
-        // Вставляем в оригинальную очередь
         val mutableOriginal = originalQueue.toMutableList()
         val currentId = c.currentMediaItem?.mediaId
         val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
