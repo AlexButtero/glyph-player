@@ -10,7 +10,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.nothing.glyphplayer.GlyphPlayerApp
@@ -160,41 +159,49 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     
     fun toggleShuffle() {
         val c = controller ?: return
+        val newShuffle = !_state.value.shuffle
+        
+        // Получаем текущее состояние
         val currentItem = c.currentMediaItem ?: return
         val currentPos = c.currentPosition
         val wasPlaying = c.isPlaying
-        
-        val newShuffleState = !_state.value.shuffle
-        _state.value = _state.value.copy(shuffle = newShuffleState) // Мгновенно обновляем кнопку
 
-        c.shuffleModeEnabled = false // Принудительно отключаем нативный шаффл
+        // Получаем реальную текущую очередь из плеера
+        val currentQueue = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
+        if (currentQueue.isEmpty()) return
 
-        if (newShuffleState) {
-            // Включаем шаффл
-            if (originalQueue.isEmpty()) return
-            val items = originalQueue.shuffled().toMutableList()
-            val newCurrentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
-            if (newCurrentIndex != -1) {
-                // Мгновенно обновляем UI
-                _state.value = _state.value.copy(queue = items, currentIndex = newCurrentIndex)
-                
-                c.setMediaItems(items, newCurrentIndex, currentPos)
-                c.prepare() // Обязательно готовим плеер к новой очереди
-            }
+        if (newShuffle) {
+            // Включаем шаффл: сохраняем исходную очередь и перемешиваем
+            originalQueue = currentQueue.toList()
+            currentQueue.shuffle()
         } else {
-            // Выключаем шаффл, возвращаем исходную очередь
-            if (originalQueue.isEmpty()) return
-            val items = originalQueue
-            val newCurrentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
-            if (newCurrentIndex != -1) {
-                // Мгновенно обновляем UI
-                _state.value = _state.value.copy(queue = items, currentIndex = newCurrentIndex)
-                
-                c.setMediaItems(items, newCurrentIndex, currentPos)
-                c.prepare() // Обязательно готовим плеер к новой очереди
+            // Выключаем шаффл: возвращаем исходную очередь
+            if (originalQueue.isNotEmpty()) {
+                currentQueue.clear()
+                currentQueue.addAll(originalQueue)
             }
         }
+
+        // Находим текущий трек в новом списке
+        val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
         
+        // Мгновенно обновляем UI для отзывчивости
+        _state.value = _state.value.copy(
+            shuffle = newShuffle,
+            queue = currentQueue,
+            currentIndex = if (newIndex != -1) newIndex else 0
+        )
+
+        // Обновляем плеер
+        if (newIndex != -1) {
+            c.setMediaItems(currentQueue, newIndex, currentPos)
+        } else {
+            // Если трек не найден (например, был добавлен динамически), ставим его в начало
+            currentQueue.add(0, currentItem)
+            c.setMediaItems(currentQueue, 0, currentPos)
+        }
+        
+        c.prepare()
         if (wasPlaying) c.play()
     }
 
