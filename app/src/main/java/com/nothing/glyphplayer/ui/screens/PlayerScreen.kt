@@ -162,8 +162,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     }
 
     if (showEq) {
-        // Принудительное подключение эквалайзера перед открытием
-        LaunchedEffect(Unit) { vm.forceAttachEqualizer() }
         EqDialog(onClose = { showEq = false })
     }
     
