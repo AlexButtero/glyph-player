@@ -63,7 +63,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
 
-    // ОТДЕЛЬНЫЙ поток для позиции — не вызывает перерисовку тяжелых экранов
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs
 
@@ -78,15 +77,19 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
     private var lastBackPressTime = 0L
-    private var lastUpdatedPosition = -1L
     private var originalQueue: List<MediaItem> = emptyList()
+
+    // Сохраняем обзервер, чтобы удалить его в onCleared
+    private val lifecycleObserver = object : DefaultLifecycleObserver {
+        override fun onStart(owner: LifecycleOwner) { startPolling() }
+        override fun onStop(owner: LifecycleOwner) { pollJob?.cancel() }
+    }
 
     init {
         connect()
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) { startPolling() }
-            override fun onStop(owner: LifecycleOwner) { pollJob?.cancel() }
-        })
+        try {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(lifecycleObserver)
+        } catch (_: Exception) { }
     }
 
     private fun connect() {
@@ -106,50 +109,56 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun refresh() {
         val c = controller ?: return
-        val item = c.currentMediaItem
-        val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
-        
-        _state.update { current ->
-            current.copy(
-                isPlaying = c.isPlaying,
-                currentTrackId = item?.mediaId?.toLongOrNull(),
-                title = item?.mediaMetadata?.title?.toString(),
-                artist = item?.mediaMetadata?.artist?.toString(),
-                artUri = item?.mediaMetadata?.artworkUri?.toString(),
-                durationMs = c.duration.coerceAtLeast(0),
-                repeatMode = c.repeatMode,
-                speed = c.playbackParameters.speed,
-                queue = q,
-                currentIndex = c.currentMediaItemIndex
-            )
-        }
-        
-        val newId = _state.value.currentTrackId
-        if (newId != null && newId != currentLyricsTrackId) {
-            currentLyricsTrackId = newId
-            val uri = library.value.find { it.id == newId }?.uri
-            if (uri != null) {
-                scope.launch { _lyrics.value = LyricsLoader.load(context, uri) }
-            } else {
-                _lyrics.value = emptyList()
+        try {
+            val item = c.currentMediaItem
+            val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
+            
+            _state.update { current ->
+                current.copy(
+                    isPlaying = c.isPlaying,
+                    currentTrackId = item?.mediaId?.toLongOrNull(),
+                    title = item?.mediaMetadata?.title?.toString(),
+                    artist = item?.mediaMetadata?.artist?.toString(),
+                    artUri = item?.mediaMetadata?.artworkUri?.toString(),
+                    durationMs = c.duration.coerceAtLeast(0),
+                    repeatMode = c.repeatMode,
+                    speed = c.playbackParameters.speed,
+                    queue = q,
+                    currentIndex = c.currentMediaItemIndex
+                )
             }
-        }
+            
+            val newId = _state.value.currentTrackId
+            if (newId != null && newId != currentLyricsTrackId) {
+                currentLyricsTrackId = newId
+                val uri = library.value.find { it.id == newId }?.uri
+                if (uri != null) {
+                    scope.launch { _lyrics.value = LyricsLoader.load(context, uri) }
+                } else {
+                    _lyrics.value = emptyList()
+                }
+            }
+        } catch (_: Exception) { }
     }
 
     private fun startPolling() {
         if (pollJob?.isActive == true) return
+        if (!scope.isActive) return // Защита от вызова после onCleared
+
         pollJob = scope.launch {
             while (isActive) {
-                val c = controller ?: break
-                val newPos = c.currentPosition.coerceAtLeast(0)
-                // Обновляем позицию только если она изменилась хотя бы на 100мс
-                if (abs(_positionMs.value - newPos) >= 100) {
-                    _positionMs.value = newPos
-                }
-                // Обновляем длительность только если она изменилась
-                val newDur = c.duration.coerceAtLeast(0)
-                if (_state.value.durationMs != newDur) {
-                    _state.update { it.copy(durationMs = newDur) }
+                try {
+                    val c = controller ?: break
+                    val newPos = c.currentPosition.coerceAtLeast(0)
+                    if (abs(_positionMs.value - newPos) >= 100) {
+                        _positionMs.value = newPos
+                    }
+                    val newDur = c.duration.coerceAtLeast(0)
+                    if (_state.value.durationMs != newDur) {
+                        _state.update { it.copy(durationMs = newDur) }
+                    }
+                } catch (_: Exception) {
+                    break // Контроллер освобожден или сервис убит
                 }
                 delay(500)
             }
@@ -164,82 +173,95 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         val c = controller ?: return
-        val items = tracks.map { it.toMediaItem() }
-        if (items.isEmpty()) return
-        
-        originalQueue = items
-        _state.update { it.copy(shuffle = false) }
-        
-        c.shuffleModeEnabled = false
-        c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
-        c.prepare()
-        c.play()
+        try {
+            val items = tracks.map { it.toMediaItem() }
+            if (items.isEmpty()) return
+            
+            originalQueue = items
+            _state.update { it.copy(shuffle = false) }
+            
+            c.shuffleModeEnabled = false
+            c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
+            c.prepare()
+            c.play()
+        } catch (_: Exception) { }
     }
 
-    fun playPause() { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
-    fun next() { controller?.seekToNextMediaItem() }
-    fun prev() { controller?.seekToPreviousMediaItem() }
-    fun seekTo(ms: Long) { controller?.seekTo(ms); _positionMs.value = ms }
+    fun playPause() { try { controller?.let { if (it.isPlaying) it.pause() else it.play() } } catch (_: Exception) {} }
+    fun next() { try { controller?.seekToNextMediaItem() } catch (_: Exception) {} }
+    fun prev() { try { controller?.seekToPreviousMediaItem() } catch (_: Exception) {} }
+    fun seekTo(ms: Long) { try { controller?.seekTo(ms); _positionMs.value = ms } catch (_: Exception) {} }
     
     fun seekToIndex(uiIndex: Int) {
-        val c = controller ?: return
-        c.seekToDefaultPosition(uiIndex)
-        c.play()
+        try {
+            val c = controller ?: return
+            c.seekToDefaultPosition(uiIndex)
+            c.play()
+        } catch (_: Exception) { }
     }
     
     fun toggleShuffle() {
-        val c = controller ?: return
-        val newShuffle = !_state.value.shuffle
-        val currentItem = c.currentMediaItem ?: return
-        val currentPos = c.currentPosition
-        val wasPlaying = c.isPlaying
+        try {
+            val c = controller ?: return
+            val newShuffle = !_state.value.shuffle
+            val currentItem = c.currentMediaItem ?: return
+            val currentPos = c.currentPosition
+            val wasPlaying = c.isPlaying
 
-        val currentQueue = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
-        if (currentQueue.isEmpty()) return
+            val currentQueue = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
+            if (currentQueue.isEmpty()) return
 
-        if (newShuffle) {
-            originalQueue = currentQueue.toList()
-            currentQueue.shuffle()
-        } else {
-            if (originalQueue.isNotEmpty()) {
-                currentQueue.clear()
-                currentQueue.addAll(originalQueue)
+            if (newShuffle) {
+                originalQueue = currentQueue.toList()
+                currentQueue.shuffle()
+            } else {
+                if (originalQueue.isNotEmpty()) {
+                    currentQueue.clear()
+                    currentQueue.addAll(originalQueue)
+                }
             }
-        }
 
-        val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
-        
-        _state.update { it.copy(shuffle = newShuffle, queue = currentQueue, currentIndex = if (newIndex != -1) newIndex else 0) }
+            val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
+            
+            _state.update { it.copy(shuffle = newShuffle, queue = currentQueue, currentIndex = if (newIndex != -1) newIndex else 0) }
 
-        if (newIndex != -1) {
-            c.setMediaItems(currentQueue, newIndex, currentPos)
-        } else {
-            currentQueue.add(0, currentItem)
-            c.setMediaItems(currentQueue, 0, currentPos)
-        }
-        c.prepare()
-        if (wasPlaying) c.play()
+            if (newIndex != -1) {
+                c.setMediaItems(currentQueue, newIndex, currentPos)
+            } else {
+                currentQueue.add(0, currentItem)
+                c.setMediaItems(currentQueue, 0, currentPos)
+            }
+            c.prepare()
+            if (wasPlaying) c.play()
+        } catch (_: Exception) { }
     }
 
     fun stopAndClear() {
-        controller?.stop()
-        controller?.clearMediaItems()
+        try {
+            controller?.stop()
+            controller?.clearMediaItems()
+        } catch (_: Exception) { }
         originalQueue = emptyList()
         _state.value = PlaybackState()
         _positionMs.value = 0L
     }
 
     fun cycleRepeat() {
-        controller?.let {
-            it.repeatMode = when (it.repeatMode) {
-                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                else -> Player.REPEAT_MODE_OFF
+        try {
+            controller?.let {
+                it.repeatMode = when (it.repeatMode) {
+                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                    else -> Player.REPEAT_MODE_OFF
+                }
             }
-        }
+        } catch (_: Exception) { }
     }
 
-    fun setSpeed(speed: Float) { controller?.setPlaybackSpeed(speed); _state.update { it.copy(speed = speed) } }
+    fun setSpeed(speed: Float) { 
+        try { controller?.setPlaybackSpeed(speed) } catch (_: Exception) {}
+        _state.update { it.copy(speed = speed) } 
+    }
 
     fun setSleepTimer(minutes: Int) {
         sleepJob?.cancel()
@@ -247,33 +269,40 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(sleepSecondsRemaining = minutes * 60) }
         sleepJob = scope.launch {
             var remaining = minutes * 60
-            while (remaining > 0) { delay(1000); remaining--; _state.update { it.copy(sleepSecondsRemaining = remaining) } }
-            controller?.pause(); _state.update { it.copy(sleepSecondsRemaining = null) }
+            while (remaining > 0) { 
+                delay(1000); remaining--; _state.update { it.copy(sleepSecondsRemaining = remaining) } 
+            }
+            try { controller?.pause() } catch (_: Exception) {}
+            _state.update { it.copy(sleepSecondsRemaining = null) }
         }
     }
 
     fun addToQueue(tracks: List<Track>) { 
-        val c = controller ?: return
-        val items = tracks.map { it.toMediaItem() }
-        c.addMediaItems(items)
-        originalQueue = originalQueue + items
+        try {
+            val c = controller ?: return
+            val items = tracks.map { it.toMediaItem() }
+            c.addMediaItems(items)
+            originalQueue = originalQueue + items
+        } catch (_: Exception) { }
     }
     
     fun playNext(tracks: List<Track>) { 
-        val c = controller ?: return
-        val items = tracks.map { it.toMediaItem() }
-        val insertIndex = c.currentMediaItemIndex + 1
-        c.addMediaItems(insertIndex, items)
-        
-        val mutableOriginal = originalQueue.toMutableList()
-        val currentId = c.currentMediaItem?.mediaId
-        val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
-        if (originalCurrentIndex != -1) {
-            mutableOriginal.addAll(originalCurrentIndex + 1, items)
-        } else {
-            mutableOriginal.addAll(items)
-        }
-        originalQueue = mutableOriginal
+        try {
+            val c = controller ?: return
+            val items = tracks.map { it.toMediaItem() }
+            val insertIndex = c.currentMediaItemIndex + 1
+            c.addMediaItems(insertIndex, items)
+            
+            val mutableOriginal = originalQueue.toMutableList()
+            val currentId = c.currentMediaItem?.mediaId
+            val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
+            if (originalCurrentIndex != -1) {
+                mutableOriginal.addAll(originalCurrentIndex + 1, items)
+            } else {
+                mutableOriginal.addAll(items)
+            }
+            originalQueue = mutableOriginal
+        } catch (_: Exception) { }
     }
     
     fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
@@ -314,6 +343,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun saveLyrics(trackId: Long, text: String) { scope.launch { repo.saveLyrics(trackId, text) } }
 
     override fun onCleared() {
+        // ОЧЕНЬ ВАЖНО: удаляем обзервер, чтобы он не держал ссылку на уничтоженный ViewModel
+        try {
+            ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
+        } catch (_: Exception) { }
+        
         controller?.release(); controller = null; pollJob?.cancel(); sleepJob?.cancel(); super.onCleared()
     }
 
