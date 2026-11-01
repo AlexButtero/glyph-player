@@ -79,7 +79,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var lastBackPressTime = 0L
     private var originalQueue: List<MediaItem> = emptyList()
 
-    // Сохраняем обзервер, чтобы удалить его в onCleared
     private val lifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) { startPolling() }
         override fun onStop(owner: LifecycleOwner) { pollJob?.cancel() }
@@ -143,7 +142,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun startPolling() {
         if (pollJob?.isActive == true) return
-        if (!scope.isActive) return // Защита от вызова после onCleared
+        if (!scope.isActive) return
 
         pollJob = scope.launch {
             while (isActive) {
@@ -158,7 +157,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                         _state.update { it.copy(durationMs = newDur) }
                     }
                 } catch (_: Exception) {
-                    break // Контроллер освобожден или сервис убит
+                    break
                 }
                 delay(500)
             }
@@ -195,8 +194,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun seekToIndex(uiIndex: Int) {
         try {
             val c = controller ?: return
-            c.seekToDefaultPosition(uiIndex)
-            c.play()
+            // Проверяем границы, чтобы не вызвать IllegalSeekPositionException
+            if (uiIndex in 0 until c.mediaItemCount) {
+                c.seekToDefaultPosition(uiIndex)
+                c.play()
+            }
         } catch (_: Exception) { }
     }
     
@@ -290,14 +292,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val c = controller ?: return
             val items = tracks.map { it.toMediaItem() }
-            val insertIndex = c.currentMediaItemIndex + 1
+            
+            // Безопасный расчет индекса для вставки
+            val currentIdx = c.currentMediaItemIndex.coerceAtLeast(0)
+            val insertIndex = (currentIdx + 1).coerceAtMost(c.mediaItemCount)
+            
             c.addMediaItems(insertIndex, items)
             
             val mutableOriginal = originalQueue.toMutableList()
             val currentId = c.currentMediaItem?.mediaId
             val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
             if (originalCurrentIndex != -1) {
-                mutableOriginal.addAll(originalCurrentIndex + 1, items)
+                mutableOriginal.addAll((originalCurrentIndex + 1).coerceAtMost(mutableOriginal.size), items)
             } else {
                 mutableOriginal.addAll(items)
             }
@@ -343,7 +349,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun saveLyrics(trackId: Long, text: String) { scope.launch { repo.saveLyrics(trackId, text) } }
 
     override fun onCleared() {
-        // ОЧЕНЬ ВАЖНО: удаляем обзервер, чтобы он не держал ссылку на уничтоженный ViewModel
         try {
             ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
         } catch (_: Exception) { }
