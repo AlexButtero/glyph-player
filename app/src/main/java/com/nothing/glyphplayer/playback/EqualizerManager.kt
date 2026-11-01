@@ -13,7 +13,8 @@ object EqualizerManager {
     fun init(context: Context) {
         if (prefs == null) {
             prefs = context.getSharedPreferences("eq_prefs", Context.MODE_PRIVATE)
-            isEnabledState = prefs.getBoolean("eq_enabled", false)
+            // ИСПРАВЛЕНО: используем безопасный вызов ?.
+            isEnabledState = prefs?.getBoolean("eq_enabled", false) ?: false
         }
     }
 
