@@ -164,10 +164,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 onDismissRequest = { showTrackMenu = false }, title = { Text(currentTrack.title, color = Color.White) },
                 text = {
                     Column {
-                        TextButton(onClick = { 
-                            showTrackMenu = false
-                            showAddToPlaylist = true 
-                        }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
+                        TextButton(onClick = { showTrackMenu = false; showAddToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
                         TextButton(onClick = { vm.addToQueue(listOf(currentTrack)); showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }
                         TextButton(onClick = { trackToRename = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_rename), color = Color.White) }
                         TextButton(onClick = { trackToDelete = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_delete), color = Red) }
@@ -211,14 +208,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         AlertDialog(
             onDismissRequest = { trackToRename = null }, title = { Text(stringResource(R.string.dialog_rename_title), color = Color.White) },
             text = { OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) },
-            confirmButton = { 
-                TextButton(onClick = { 
-                    if (newTitle.isNotBlank()) { 
-                        vm.renameTrack(track, newTitle)
-                        trackToRename = null 
-                    } 
-                }) { Text(stringResource(R.string.action_save), color = Red) } 
-            },
+            confirmButton = { TextButton(onClick = { if (newTitle.isNotBlank()) { vm.renameTrack(track, newTitle); trackToRename = null } }) { Text(stringResource(R.string.action_save), color = Red) } },
             dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
@@ -249,7 +239,6 @@ fun LyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: 
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
-            // ИСПОЛЬЗУЕМ ГОРИЗОНТАЛЬНЫЙ СВАЙП
             detectHorizontalDragGestures(
                 onDragEnd = { 
                     if (dragOffsetX > 150f && !isEditing) onBack()
