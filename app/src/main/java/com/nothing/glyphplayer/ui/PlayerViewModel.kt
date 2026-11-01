@@ -11,7 +11,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
-import androidx.media3.exoplayer.source.DefaultShuffleOrder
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.nothing.glyphplayer.GlyphPlayerApp
@@ -178,15 +177,30 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     
     fun toggleShuffle() {
         val c = controller ?: return
-        val newState = !c.shuffleModeEnabled
-        c.shuffleModeEnabled = newState
-        if (newState) {
-            // Принудительно генерируем новый случайный порядок
-            try {
-                c.setShuffleOrder(DefaultShuffleOrder(c.mediaItemCount, System.currentTimeMillis()))
-            } catch (_: Exception) {}
-        }
-        refresh() // Обновляем UI
+        val currentItem = c.currentMediaItem ?: return
+        val currentPos = c.currentPosition
+        val wasPlaying = c.isPlaying
+        
+        val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
+        if (items.isEmpty()) return
+        
+        val currentIndex = items.indexOfFirst { it.mediaId == currentItem.mediaId }
+        if (currentIndex == -1) return
+        
+        // Перемешиваем очередь, сохраняя текущий трек на его месте
+        items.removeAt(currentIndex)
+        items.shuffle()
+        val insertIndex = currentIndex.coerceAtMost(items.size)
+        items.add(insertIndex, currentItem)
+        
+        // Обновляем очередь в плеере
+        c.setMediaItems(items, insertIndex, currentPos)
+        if (wasPlaying) c.play()
+        
+        // Мгновенно обновляем UI
+        refresh()
+        
+        _state.value = _state.value.copy(shuffle = !_state.value.shuffle)
     }
 
     fun stopAndClear() {
