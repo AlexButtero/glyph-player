@@ -5,32 +5,23 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Сжимаем весь ваш рисунок ровно на 75% и центрируем по безопасной зоне -->
-    <group
-        android:scaleX="0.75"
-        android:scaleY="0.75"
-        android:translateX="13.5"
-        android:translateY="9.75">
+    <!-- Черный круг (r=22) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,54 m-22,0 a22,22 0 1,1 44,0 a22,22 0 1,1 -44,0" />
         
-        <!-- Черный круг (ваш оригинал) -->
-        <path
-            android:fillColor="#000000"
-            android:pathData="M54,54 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
-            
-        <!-- Красный треугольник Play (ваш оригинал) -->
-        <path
-            android:fillColor="#D71921"
-            android:pathData="M46,36 L72,54 L46,72 Z" />
-            
-        <!-- Черная полоса (ваш оригинал) -->
-        <path
-            android:fillColor="#000000"
-            android:pathData="M16,96 L92,96 L92,100 L16,100 Z" />
-            
-        <!-- Красная точка (ваш оригинал) -->
-        <path
-            android:fillColor="#D71921"
-            android:pathData="M26,98 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0" />
-            
-    </group>
+    <!-- Красный треугольник Play -->
+    <path
+        android:fillColor="#D71921"
+        android:pathData="M49,44 L65,54 L49,64 Z" />
+        
+    <!-- Черная полоса (длиннее круга на 4px с каждой стороны) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M28,82 L80,82 L80,84 L28,84 Z" />
+        
+    <!-- Красная точка -->
+    <path
+        android:fillColor="#D71921"
+        android:pathData="M34,83 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0" />
 </vector>
