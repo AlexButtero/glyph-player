@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -51,6 +52,7 @@ import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.snapshotFlow
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -115,7 +117,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF1E1E1E), // Темно-серый сверху
+                        Color(0xFF1A1A1A), // Темно-серый сверху
                         Color.Black        // Черный снизу
                     )
                 )
@@ -150,7 +152,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ВЕРХНЯЯ ПАНЕЛЬ С ТЕКУЩЕЙ СТРОКОЙ (если есть текст)
+            // ВЕРХНЯЯ ПАНЕЛЬ С ТЕКУЩЕЙ СТРОКОЙ
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -158,40 +160,34 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             ) {
                 Card(
                     onClick = { showLyrics = true },
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A).copy(alpha = 0.8f)),
-                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = currentLine?.text ?: "",
-                            color = Color.White,
-                            fontSize = 16.sp,
+                            color = Red,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = "Нажмите, чтобы открыть караоке",
-                            color = Color.Gray,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(top = 4.dp)
+                            maxLines = 2,
+                            lineHeight = 26.sp
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(1f)) // Отталкиваем постер вниз
 
             // БЛОК ПОСТЕРА
             Box(
                 modifier = Modifier
                     .offset { IntOffset(animatedPosterOffsetX.roundToInt(), 0) }
                     .scale(posterScale)
-                    .size(280.dp)
+                    .size(260.dp) // Чуть уменьшили, чтобы влезло с текстом
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.DarkGray)
                     .pointerInput(Unit) {
@@ -240,7 +236,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 Text(fmt(state.durationMs), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(16.dp))
 
             // Кнопки управления
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
@@ -345,20 +341,34 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ОБНОВЛЕННЫЙ ЭКРАН КАРАОКЕ (С блюром и отсчетом)
+// ОБНОВЛЕННЫЙ ЭКРАН КАРАОКЕ (С кнопками Offset, ручным скроллом и двойным тапом)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
     val context = LocalContext.current
     var manualText by remember { mutableStateOf("") }
     var isEditing by remember { mutableStateOf(false) }
-    var showOffsetSlider by remember { mutableStateOf(false) }
+    var showOffsetControls by remember { mutableStateOf(false) }
     var dragOffsetX by remember { mutableStateOf(0f) }
     
     val lyricsFromFile = vm.lyrics.collectAsState().value
     val offsetMs by vm.lyricsOffsetMs.collectAsState()
 
     val listState = rememberLazyListState()
+
+    // Отслеживаем, листает ли пользователь экран вручную
+    var isUserScrolling by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { isScrolling ->
+                if (isScrolling) {
+                    isUserScrolling = true
+                } else {
+                    delay(3000) // Если пользователь перестал листать, через 3 сек возвращаем караоке
+                    isUserScrolling = false
+                }
+            }
+    }
 
     LaunchedEffect(trackId) { 
         trackId?.let { id -> vm.getSavedLyrics(id) { saved -> if (!saved.isNullOrBlank()) manualText = saved } } 
@@ -374,7 +384,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     val parsedLyrics = remember(manualText) { if (manualText.isNotBlank()) LyricsLoader.parse(manualText) else emptyList() }
     val displayLyrics = if (parsedLyrics.isNotEmpty()) parsedLyrics else lyricsFromFile
 
-    // Считаем эффективную позицию с учетом смещения
     val effectivePos = (currentPos - offsetMs).coerceAtLeast(0)
     val activeIndex = remember(displayLyrics, effectivePos) { displayLyrics.indexOfLast { it.timeMs <= effectivePos } }
 
@@ -394,8 +403,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    LaunchedEffect(activeIndex) {
-        if (activeIndex in displayLyrics.indices && !isEditing) {
+    // Авто-скролл только если пользователь не листает сам
+    LaunchedEffect(activeIndex, isUserScrolling) {
+        if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
             listState.animateScrollToItem(activeIndex, scrollOffset = -400)
         }
     }
@@ -415,10 +425,10 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
                 
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     if (!isEditing) {
-                        IconButton(onClick = { showOffsetSlider = !showOffsetSlider }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Offset", tint = Color.Gray, modifier = Modifier.size(20.dp))
+                        IconButton(onClick = { showOffsetControls = !showOffsetControls }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Offset", tint = if (showOffsetControls) Red else Color.Gray, modifier = Modifier.size(20.dp))
                         }
                         TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
                     } else {
@@ -429,18 +439,35 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 }
             }
 
-            // Слайдер смещения
-            AnimatedVisibility(visible = showOffsetSlider && !isEditing) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                    Text("-1.5s", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                    Slider(
-                        value = offsetMs.toFloat(),
-                        onValueChange = { vm.setLyricsOffset(it.toLong()) },
-                        valueRange = -1500f..1500f,
-                        colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                    )
-                    Text("+1.5s", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            // Панель настройки задержки (Offset)
+            AnimatedVisibility(visible = showOffsetControls && !isEditing) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Задержка текста: ${String.format("%.1f", offsetMs / 1000f)} сек",
+                            color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                            Button(onClick = { vm.setLyricsOffset(offsetMs - 500) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                                Text("-0.5s", color = Color.White)
+                            }
+                            Slider(
+                                value = offsetMs.toFloat(),
+                                onValueChange = { vm.setLyricsOffset(it.toLong()) },
+                                valueRange = -2000f..2000f,
+                                colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
+                                modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
+                            )
+                            Button(onClick = { vm.setLyricsOffset(offsetMs + 500) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                                Text("+0.5s", color = Color.White)
+                            }
+                        }
+                    }
                 }
             }
             
@@ -475,9 +502,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 val color by animateColorAsState(if (isActive) Red else Color.Gray, label = "color")
                                 val fontSize by animateFloatAsState(if (isActive) 22f else 16f, label = "size")
                                 
-                                // Блюр для неактивных строк (эффект глубины)
-                                val blurRadius = if (distance > 2) 4f else 0f
-                                val alpha = when { isActive -> 1f; distance == 1 -> 0.7f; distance == 2 -> 0.5f; else -> 0.3f }
+                                // Убираем блюр, если пользователь листает вручную
+                                val blurRadius = if (!isUserScrolling && distance > 2) 4f else 0f
+                                val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.7f; distance == 2 -> 0.5f; else -> 0.3f }
 
                                 Text(
                                     text = line.text,
@@ -488,6 +515,14 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .blur(blurRadius.dp)
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(
+                                                onDoubleTap = { 
+                                                    // Двойной тап перематывает трек
+                                                    vm.seekTo(line.timeMs) 
+                                                }
+                                            )
+                                        }
                                         .padding(vertical = 12.dp, horizontal = 16.dp)
                                 )
                             }
