@@ -55,6 +55,7 @@ import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -88,7 +89,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     var posterOffsetX by remember { mutableStateOf(0f) }
     val animatedPosterOffsetX by animateFloatAsState(
         targetValue = posterOffsetX,
-        // ИСПРАВЛЕНО: Убрали отскок (Bouncy), сделали плавное затухание
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "posterOffset"
     )
@@ -157,12 +157,18 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ПЛЕЙЛИСТ
+            // ПЛЕЙЛИСТ (Сделано более заметным)
             state.playlistName?.let { name ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 8.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally, 
+                    modifier = Modifier
+                        .background(Color(0xFF1A1A1A).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
                     Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 2.sp)
-                    Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
+                Spacer(Modifier.height(8.dp))
             }
 
             // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
@@ -192,7 +198,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
-            // ПОСТЕР С ПРЕВЬЮ СОСЕДНИХ ТРЕКОВ
+            // ПОСТЕР
             val posterPx = with(LocalDensity.current) { 280.dp.toPx() }
             Box(
                 modifier = Modifier
@@ -392,7 +398,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (С ЦЕНТРИРОВАНИЕМ ТЕКСТА)
+// ЭКРАН КАРАОКЕ (ЦЕНТРИРОВАНИЕ ИСПРАВЛЕНО)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -452,18 +458,20 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // ИСПРАВЛЕНО: Теперь активная строка центрируется
+    // ИСПРАВЛЕНО: Более надежный скролл к центру
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
+            // Ждем, пока layout не будет готов
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+            delay(50) 
+            
             val viewportHeight = listState.layoutInfo.viewportSize.height
             if (viewportHeight > 0) {
                 val itemInfo = listState.layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
                 val itemHeight = itemInfo?.size ?: 100
-                val targetOffset = -(viewportHeight / 2) + (itemHeight / 2)
+                val centerOffset = -(viewportHeight / 2) + (itemHeight / 2)
                 
-                listState.animateScrollToItem(activeIndex, scrollOffset = targetOffset)
-            } else {
-                listState.animateScrollToItem(activeIndex)
+                listState.animateScrollToItem(activeIndex, centerOffset)
             }
         }
     }
@@ -550,7 +558,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 300.dp) // Позволяет центрировать первую/последнюю строку
+                            contentPadding = PaddingValues(vertical = 300.dp) // Отступы для центрирования
                         ) {
                             itemsIndexed(displayLyrics) { index, line ->
                                 val isActive = index == activeIndex
@@ -570,7 +578,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 24.dp, horizontal = 16.dp) // Увеличен интервал между строками
+                                        .padding(vertical = 20.dp, horizontal = 16.dp)
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale
