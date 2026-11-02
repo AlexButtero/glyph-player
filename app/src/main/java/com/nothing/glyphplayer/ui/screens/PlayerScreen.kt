@@ -88,12 +88,13 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     var posterOffsetX by remember { mutableStateOf(0f) }
     val animatedPosterOffsetX by animateFloatAsState(
         targetValue = posterOffsetX,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        // ИСПРАВЛЕНО: Убрали отскок (Bouncy), сделали плавное затухание
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "posterOffset"
     )
     val posterScale by animateFloatAsState(
         targetValue = if (abs(posterOffsetX) > 10f) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
         label = "posterScale"
     )
 
@@ -191,11 +192,11 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
-            // ПОСТЕР С ПРЕВЬЮ СОСЕДНИХ ТРЕКОВ (УВЕЛИЧЕН ДО 280)
+            // ПОСТЕР С ПРЕВЬЮ СОСЕДНИХ ТРЕКОВ
             val posterPx = with(LocalDensity.current) { 280.dp.toPx() }
             Box(
                 modifier = Modifier
-                    .size(280.dp) // УВЕЛИЧЕНО
+                    .size(280.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.DarkGray)
                     .pointerInput(Unit) {
@@ -391,7 +392,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ
+// ЭКРАН КАРАОКЕ (С ЦЕНТРИРОВАНИЕМ ТЕКСТА)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -451,9 +452,19 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
+    // ИСПРАВЛЕНО: Теперь активная строка центрируется
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
-            listState.animateScrollToItem(activeIndex, scrollOffset = 0)
+            val viewportHeight = listState.layoutInfo.viewportSize.height
+            if (viewportHeight > 0) {
+                val itemInfo = listState.layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
+                val itemHeight = itemInfo?.size ?: 100
+                val targetOffset = -(viewportHeight / 2) + (itemHeight / 2)
+                
+                listState.animateScrollToItem(activeIndex, scrollOffset = targetOffset)
+            } else {
+                listState.animateScrollToItem(activeIndex)
+            }
         }
     }
 
@@ -539,7 +550,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(top = 20.dp, bottom = 300.dp)
+                            contentPadding = PaddingValues(vertical = 300.dp) // Позволяет центрировать первую/последнюю строку
                         ) {
                             itemsIndexed(displayLyrics) { index, line ->
                                 val isActive = index == activeIndex
@@ -559,7 +570,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 20.dp, horizontal = 16.dp)
+                                        .padding(vertical = 24.dp, horizontal = 16.dp) // Увеличен интервал между строками
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale
