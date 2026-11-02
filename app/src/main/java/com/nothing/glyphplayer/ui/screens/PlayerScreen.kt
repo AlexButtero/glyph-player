@@ -26,7 +26,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -111,12 +110,12 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // РАЗМЫТЫЙ ФОН
+        // РАЗМЫТЫЙ ФОН (без изменений)
         AsyncImage(
             model = state.artUri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().blur(80.dp).graphicsLayer { alpha = 0.4f }
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.4f }
         )
         Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Black.copy(alpha = 0.95f)))))
 
@@ -157,18 +156,18 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ПЛЕЙЛИСТ (Сделано более заметным)
+            // НАДПИСЬ ПЛЕЙЛИСТА (ЛАКОНИЧНАЯ)
             state.playlistName?.let { name ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally, 
-                    modifier = Modifier
-                        .background(Color(0xFF1A1A1A).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 12.dp)
                 ) {
-                    Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 2.sp)
-                    Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 1.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text("•", color = Color.Gray, fontSize = 10.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(8.dp))
             }
 
             // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
@@ -398,7 +397,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ЦЕНТРИРОВАНИЕ ИСПРАВЛЕНО)
+// ЭКРАН КАРАОКЕ (ИСПРАВЛЕНО МЕРЦАНИЕ И ЦЕНТРИРОВАНИЕ)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -458,20 +457,23 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // ИСПРАВЛЕНО: Более надежный скролл к центру
+    // ЖЕСТКИЙ ЦЕНТРАЛЬНЫЙ СКРОЛЛ
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
             // Ждем, пока layout не будет готов
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
-            delay(50) 
             
-            val viewportHeight = listState.layoutInfo.viewportSize.height
-            if (viewportHeight > 0) {
-                val itemInfo = listState.layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
-                val itemHeight = itemInfo?.size ?: 100
-                val centerOffset = -(viewportHeight / 2) + (itemHeight / 2)
-                
+            val layoutInfo = listState.layoutInfo
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
+            
+            if (itemInfo != null) {
+                // Вычисляем точное смещение для центра
+                val centerOffset = -(viewportHeight / 2) + (itemInfo.size / 2)
                 listState.animateScrollToItem(activeIndex, centerOffset)
+            } else {
+                // Если строка вне экрана, прокручиваем к ней (она окажется сверху, потом сработает следующий тик)
+                listState.animateScrollToItem(activeIndex)
             }
         }
     }
@@ -558,17 +560,17 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 300.dp) // Отступы для центрирования
+                            contentPadding = PaddingValues(vertical = 200.dp)
                         ) {
                             itemsIndexed(displayLyrics) { index, line ->
                                 val isActive = index == activeIndex
                                 val distance = abs(index - activeIndex)
                                 
                                 val color by animateColorAsState(if (isActive) Red else Color.Gray, label = "color")
-                                val scale by animateFloatAsState(if (isActive) 1.15f else 1f, label = "scale")
+                                val scale by animateFloatAsState(if (isActive) 1.1f else 1f, label = "scale")
                                 
-                                val blurRadius = if (!isUserScrolling && distance > 2) 4f else 0f
-                                val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.7f; distance == 2 -> 0.5f; else -> 0.3f }
+                                // УБРАН BLUR. Используем только Alpha для плавности.
+                                val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.6f; distance == 2 -> 0.4f; else -> 0.2f }
 
                                 Text(
                                     text = line.text,
@@ -578,12 +580,11 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 20.dp, horizontal = 16.dp)
+                                        .padding(vertical = 16.dp, horizontal = 16.dp)
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale
                                         }
-                                        .blur(blurRadius.dp)
                                         .pointerInput(Unit) {
                                             detectTapGestures(
                                                 onDoubleTap = { 
