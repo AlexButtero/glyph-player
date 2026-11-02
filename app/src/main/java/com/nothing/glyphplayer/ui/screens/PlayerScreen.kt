@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -109,14 +110,13 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // РАЗМЫТЫЙ ФОН (как в VK Музыке)
+        // РАЗМЫТЫЙ ФОН
         AsyncImage(
             model = state.artUri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().blur(80.dp).graphicsLayer { alpha = 0.4f }
         )
-        // Темная вуаль поверх фона
         Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Black.copy(alpha = 0.95f)))))
 
         Column(
@@ -140,7 +140,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ВЕРХНЯЯ ПАНЕЛЬ (Стрелка, Эквалайзер, Три точки)
+            // Шапка
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
                 
@@ -156,15 +156,15 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // БЛОК ПЛЕЙЛИСТА (если трек из плейлиста) - ИСПРАВЛЕНО
-            state.playlistName?.let { playlistName ->
+            // ПЛЕЙЛИСТ
+            state.playlistName?.let { name ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 8.dp)) {
                     Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 2.sp)
-                    Text(playlistName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            // ТЕКУЩАЯ СТРОКА ТЕКСТА (с бегущей строкой, если длинная)
+            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -184,19 +184,18 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
-                        modifier = Modifier.basicMarquee() // Бегущая строка для длинных строк
+                        modifier = Modifier.basicMarquee()
                     )
                 }
             }
 
             Spacer(Modifier.weight(1f))
 
-            // ПОСТЕР
+            // ПОСТЕР С ПРЕВЬЮ СОСЕДНИХ ТРЕКОВ (УВЕЛИЧЕН ДО 280)
+            val posterPx = with(LocalDensity.current) { 280.dp.toPx() }
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(animatedPosterOffsetX.roundToInt(), 0) }
-                    .scale(posterScale)
-                    .size(260.dp)
+                    .size(280.dp) // УВЕЛИЧЕНО
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.DarkGray)
                     .pointerInput(Unit) {
@@ -213,11 +212,50 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                         )
                     }
             ) {
+                // ПРЕДЫДУЩИЙ ПОСТЕР
+                val prevIndex = state.currentIndex - 1
+                if (prevIndex >= 0 && prevIndex < state.queue.size) {
+                    val prevArt = state.queue[prevIndex].mediaMetadata.artworkUri
+                    if (prevArt != null) {
+                        AsyncImage(
+                            model = prevArt,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = animatedPosterOffsetX - posterPx }
+                        )
+                    }
+                }
+                
+                // СЛЕДУЮЩИЙ ПОСТЕР
+                val nextIndex = state.currentIndex + 1
+                if (nextIndex >= 0 && nextIndex < state.queue.size) {
+                    val nextArt = state.queue[nextIndex].mediaMetadata.artworkUri
+                    if (nextArt != null) {
+                        AsyncImage(
+                            model = nextArt,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = animatedPosterOffsetX + posterPx }
+                        )
+                    }
+                }
+                
+                // ТЕКУЩИЙ ПОСТЕР
                 AsyncImage(
-                    model = state.artUri, 
-                    contentDescription = null, 
-                    contentScale = ContentScale.Crop, 
-                    modifier = Modifier.fillMaxSize(),
+                    model = state.artUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationX = animatedPosterOffsetX
+                            scaleX = posterScale
+                            scaleY = posterScale
+                        },
                     placeholder = painterResource(id = R.drawable.ic_fallback_music),
                     error = painterResource(id = R.drawable.ic_fallback_music)
                 )
@@ -247,7 +285,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            // Кнопки управления
+            // Кнопки
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { vm.toggleShuffle() }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (state.shuffle) Red else Color.Gray, modifier = Modifier.size(28.dp)) }
                 IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White, modifier = Modifier.size(36.dp)) }
@@ -260,7 +298,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
             Spacer(Modifier.height(16.dp))
 
-            // НИЖНИЕ КНОПКИ (Очередь и Текст)
+            // НИЖНИЕ КНОПКИ
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 TextButton(onClick = { showQueue = true }) { 
                     Text(stringResource(R.string.queue_title), color = Color.White, style = MaterialTheme.typography.labelSmall) 
@@ -283,7 +321,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 
     if (showEq) { EqDialog(onClose = { showEq = false }) }
     
-    // Меню трех точек (с добавлением Скорости)
     if (showTrackMenu) {
         val currentTrack = lib.find { it.id == state.currentTrackId }
         if (currentTrack != null) {
@@ -303,7 +340,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         }
     }
     
-    // Остальные диалоги (плейлисты, переименование, удаление, скорость)
     if (showSpeed) SpeedDialog(currentSpeed = state.speed, onSpeedSelected = { vm.setSpeed(it); showSpeed = false }, onClose = { showSpeed = false })
     
     if (showAddToPlaylist) {
@@ -355,7 +391,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (С настройкой 0.1с, центрированием и длинными строками)
+// ЭКРАН КАРАОКЕ
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -415,15 +451,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // Скролл ровно по центру экрана
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
-            val itemInfo = listState.layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
-            val itemHeight = itemInfo?.size ?: 100
-            val viewportHeight = listState.layoutInfo.viewportSize.height
-            val targetOffset = -((viewportHeight / 2) - (itemHeight / 2))
-            
-            listState.animateScrollToItem(activeIndex, scrollOffset = targetOffset)
+            listState.animateScrollToItem(activeIndex, scrollOffset = 0)
         }
     }
 
@@ -456,7 +486,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 }
             }
 
-            // Панель настройки задержки (0.1с)
             AnimatedVisibility(visible = showOffsetControls && !isEditing) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
@@ -510,14 +539,14 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 200.dp)
+                            contentPadding = PaddingValues(top = 20.dp, bottom = 300.dp)
                         ) {
                             itemsIndexed(displayLyrics) { index, line ->
                                 val isActive = index == activeIndex
                                 val distance = abs(index - activeIndex)
                                 
                                 val color by animateColorAsState(if (isActive) Red else Color.Gray, label = "color")
-                                val fontSize by animateFloatAsState(if (isActive) 22f else 16f, label = "size")
+                                val scale by animateFloatAsState(if (isActive) 1.15f else 1f, label = "scale")
                                 
                                 val blurRadius = if (!isUserScrolling && distance > 2) 4f else 0f
                                 val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.7f; distance == 2 -> 0.5f; else -> 0.3f }
@@ -525,11 +554,16 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 Text(
                                     text = line.text,
                                     color = color.copy(alpha = alpha),
-                                    fontSize = fontSize.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(vertical = 20.dp, horizontal = 16.dp)
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
                                         .blur(blurRadius.dp)
                                         .pointerInput(Unit) {
                                             detectTapGestures(
@@ -538,7 +572,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                                 }
                                             )
                                         }
-                                        .padding(vertical = 12.dp, horizontal = 16.dp)
                                 )
                             }
                         }
