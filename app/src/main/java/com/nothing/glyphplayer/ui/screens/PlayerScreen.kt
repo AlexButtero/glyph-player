@@ -156,11 +156,11 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // БЛОК ПЛЕЙЛИСТА (если трек из плейлиста)
-            if (state.playlistName != null) {
+            // БЛОК ПЛЕЙЛИСТА (если трек из плейлиста) - ИСПРАВЛЕНО
+            state.playlistName?.let { playlistName ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 8.dp)) {
                     Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 2.sp)
-                    Text(state.playlistName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(playlistName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -418,7 +418,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     // Скролл ровно по центру экрана
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
-            // Вычисляем высоту экрана, чтобы строка была по центру
             val itemInfo = listState.layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
             val itemHeight = itemInfo?.size ?: 100
             val viewportHeight = listState.layoutInfo.viewportSize.height
