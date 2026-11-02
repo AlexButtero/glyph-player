@@ -47,7 +47,7 @@ data class PlaybackState(
     val sleepSecondsRemaining: Int? = null,
     val queue: List<MediaItem> = emptyList(),
     val currentIndex: Int = 0,
-    val playlistName: String? = null // ДОБАВЛЕНО
+    val playlistName: String? = null
 )
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -318,7 +318,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         } catch (_: Exception) { }
     }
     
-    fun shuffleAll() { val lib = library.value; if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0) }
+    fun shuffleAll(playlistName: String = "Мои треки") { 
+        val lib = library.value
+        if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0, playlistName) 
+    }
 
     fun scanLibrary(onDone: (Int) -> Unit) { 
         scope.launch { 
@@ -347,7 +350,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun deletePlaylist(id: Long) { scope.launch { repo.deletePlaylist(id) } }
     fun addMultipleToPlaylist(playlistId: Long, trackIds: List<Long>) { scope.launch { repo.addToPlaylist(playlistId, trackIds) } }
     
-    // ДОБАВЛЕНО: Передача имени плейлиста
     fun playPlaylist(playlistId: Long, playlistName: String) { 
         scope.launch { 
             val tracks = repo.tracksOf(playlistId)
