@@ -52,7 +52,6 @@ import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.snapshotFlow
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -187,7 +186,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 modifier = Modifier
                     .offset { IntOffset(animatedPosterOffsetX.roundToInt(), 0) }
                     .scale(posterScale)
-                    .size(260.dp) // Чуть уменьшили, чтобы влезло с текстом
+                    .size(260.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.DarkGray)
                     .pointerInput(Unit) {
@@ -341,7 +340,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ОБНОВЛЕННЫЙ ЭКРАН КАРАОКЕ (С кнопками Offset, ручным скроллом и двойным тапом)
+// ОБНОВЛЕННЫЙ ЭКРАН КАРАОКЕ
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -364,7 +363,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 if (isScrolling) {
                     isUserScrolling = true
                 } else {
-                    delay(3000) // Если пользователь перестал листать, через 3 сек возвращаем караоке
+                    delay(3000)
                     isUserScrolling = false
                 }
             }
@@ -439,7 +438,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 }
             }
 
-            // Панель настройки задержки (Offset)
+            // Панель настройки задержки
             AnimatedVisibility(visible = showOffsetControls && !isEditing) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
@@ -502,7 +501,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 val color by animateColorAsState(if (isActive) Red else Color.Gray, label = "color")
                                 val fontSize by animateFloatAsState(if (isActive) 22f else 16f, label = "size")
                                 
-                                // Убираем блюр, если пользователь листает вручную
                                 val blurRadius = if (!isUserScrolling && distance > 2) 4f else 0f
                                 val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.7f; distance == 2 -> 0.5f; else -> 0.3f }
 
@@ -518,7 +516,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                         .pointerInput(Unit) {
                                             detectTapGestures(
                                                 onDoubleTap = { 
-                                                    // Двойной тап перематывает трек
                                                     vm.seekTo(line.timeMs) 
                                                 }
                                             )
