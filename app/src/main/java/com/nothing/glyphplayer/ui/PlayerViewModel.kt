@@ -46,7 +46,8 @@ data class PlaybackState(
     val speed: Float = 1f,
     val sleepSecondsRemaining: Int? = null,
     val queue: List<MediaItem> = emptyList(),
-    val currentIndex: Int = 0
+    val currentIndex: Int = 0,
+    val playlistName: String? = null // ДОБАВЛЕНО
 )
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -178,14 +179,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         else { seekTo(0); lastBackPressTime = now }
     }
 
-    fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
+    fun playTracks(tracks: List<Track>, startIndex: Int = 0, playlistName: String? = null) {
         val c = controller ?: return
         try {
             val items = tracks.map { it.toMediaItem() }
             if (items.isEmpty()) return
             
             originalQueue = items
-            _state.update { it.copy(shuffle = false) }
+            _state.update { it.copy(shuffle = false, playlistName = playlistName) }
             
             c.shuffleModeEnabled = false
             c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
@@ -345,7 +346,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deletePlaylist(id: Long) { scope.launch { repo.deletePlaylist(id) } }
     fun addMultipleToPlaylist(playlistId: Long, trackIds: List<Long>) { scope.launch { repo.addToPlaylist(playlistId, trackIds) } }
-    fun playPlaylist(playlistId: Long) { scope.launch { val tracks = repo.tracksOf(playlistId); if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0) } } }
+    
+    // ДОБАВЛЕНО: Передача имени плейлиста
+    fun playPlaylist(playlistId: Long, playlistName: String) { 
+        scope.launch { 
+            val tracks = repo.tracksOf(playlistId)
+            if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0, playlistName) } 
+        } 
+    }
     
     fun getPlaylistTracks(playlistId: Long, onResult: (List<Track>) -> Unit) {
         scope.launch { val tracks = repo.tracksOf(playlistId); withContext(Dispatchers.Main) { onResult(tracks) } }
