@@ -47,7 +47,7 @@ data class PlaybackState(
     val sleepSecondsRemaining: Int? = null,
     val queue: List<MediaItem> = emptyList(),
     val currentIndex: Int = 0,
-    val playlistName: String? = null
+    val playlistName: String? = "Мои треки" // По умолчанию
 )
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -179,13 +179,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         else { seekTo(0); lastBackPressTime = now }
     }
 
-    fun playTracks(tracks: List<Track>, startIndex: Int = 0, playlistName: String? = null) {
+    fun playTracks(tracks: List<Track>, startIndex: Int = 0, playlistName: String? = "Мои треки") {
         val c = controller ?: return
         try {
             val items = tracks.map { it.toMediaItem() }
             if (items.isEmpty()) return
             
             originalQueue = items
+            // Обновляем имя плейлиста
             _state.update { it.copy(shuffle = false, playlistName = playlistName) }
             
             c.shuffleModeEnabled = false
