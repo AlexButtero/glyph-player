@@ -37,7 +37,6 @@ import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import com.nothing.glyphplayer.ui.theme.Surface
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -67,10 +66,8 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     
     var showCreateFromAdd by remember { mutableStateOf(false) }
     
-    // Состояние для Pull-To-Refresh
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
-    val scope = rememberCoroutineScope()
 
     val filtered = remember(lib, search, sortMode, isShuffled, shuffleOrder) {
         val filteredList = lib.filter {
@@ -132,6 +129,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                         TextButton(onClick = { 
                             isShuffled = true
                             shuffleOrder = lib.map { it.id }.shuffled()
+                            vm.shuffleAll("Мои треки") // Передаем имя
                         }) { 
                             Icon(Icons.Default.Shuffle, contentDescription = null, tint = Red, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
@@ -167,7 +165,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                         onClick = {
                                             if (selectedTracks.isEmpty()) { 
                                                 if (state.currentTrackId == track.id) onTrackClick()
-                                                else { vm.playTracks(filtered, idx); onTrackClick() }
+                                                else { vm.playTracks(filtered, idx, "Мои треки"); onTrackClick() } // Передаем имя
                                             } else { 
                                                 selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
                                             }
