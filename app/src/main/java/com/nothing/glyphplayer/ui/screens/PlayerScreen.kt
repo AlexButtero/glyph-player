@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -94,10 +96,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         label = "posterScale"
     )
 
-    // Эффективная позиция для текста (с учетом смещения)
     val effectivePosition = (positionMs - lyricsOffsetMs).coerceAtLeast(0)
-    
-    // Активная строка для превью в плеере
     val currentLine = remember(lyrics, effectivePosition) {
         lyrics.lastOrNull { it.timeMs <= effectivePosition }
     }
@@ -109,19 +108,17 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         QueueScreen(state.queue, state.currentIndex, onBack = { showQueue = false }, onSelect = { vm.seekToIndex(it); showQueue = false }); return 
     }
 
-    // Градиентный фон
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1A1A1A), // Темно-серый сверху
-                        Color.Black        // Черный снизу
-                    )
-                )
-            )
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        // РАЗМЫТЫЙ ФОН (как в VK Музыке)
+        AsyncImage(
+            model = state.artUri,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(80.dp).graphicsLayer { alpha = 0.4f }
+        )
+        // Темная вуаль поверх фона
+        Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Black.copy(alpha = 0.95f)))))
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -143,45 +140,58 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Шапка
+            // ВЕРХНЯЯ ПАНЕЛЬ (Стрелка, Эквалайзер, Три точки)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
-                IconButton(onClick = { showTrackMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White) }
+                
+                Row {
+                    IconButton(onClick = { showEq = true }) { 
+                        Icon(Icons.Outlined.Tune, contentDescription = "Equalizer", tint = Color.White) 
+                    }
+                    IconButton(onClick = { showTrackMenu = true }) { 
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White) 
+                    }
+                }
             }
             
             Spacer(Modifier.height(8.dp))
 
-            // ВЕРХНЯЯ ПАНЕЛЬ С ТЕКУЩЕЙ СТРОКОЙ
+            // БЛОК ПЛЕЙЛИСТА (если трек из плейлиста)
+            if (state.playlistName != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 2.sp)
+                    Text(state.playlistName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // ТЕКУЩАЯ СТРОКА ТЕКСТА (с бегущей строкой, если длинная)
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
                 exit = fadeOut() + slideOutVertically()
             ) {
-                Card(
-                    onClick = { showLyrics = true },
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable { showLyrics = true },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = currentLine?.text ?: "",
-                            color = Red,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            lineHeight = 26.sp
-                        )
-                    }
+                    Text(
+                        text = currentLine?.text ?: "",
+                        color = Red,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        modifier = Modifier.basicMarquee() // Бегущая строка для длинных строк
+                    )
                 }
             }
 
-            Spacer(Modifier.weight(1f)) // Отталкиваем постер вниз
+            Spacer(Modifier.weight(1f))
 
-            // БЛОК ПОСТЕРА
+            // ПОСТЕР
             Box(
                 modifier = Modifier
                     .offset { IntOffset(animatedPosterOffsetX.roundToInt(), 0) }
@@ -220,7 +230,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(16.dp))
 
-            // Слайдер и время
+            // Слайдер
             val duration = state.durationMs.coerceAtLeast(1)
             val currentPos = sliderPos ?: positionMs.toFloat()
             Slider(
@@ -250,15 +260,17 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
             Spacer(Modifier.height(16.dp))
 
-            // Нижние кнопки
+            // НИЖНИЕ КНОПКИ (Очередь и Текст)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                TextButton(onClick = { showEq = true }) { Text(stringResource(R.string.player_equalizer), color = Red, style = MaterialTheme.typography.labelSmall) }
-                TextButton(onClick = { showSpeed = true }) { Text("${stringResource(R.string.player_speed)} ${state.speed}x", color = Color.Gray, style = MaterialTheme.typography.labelSmall) }
-                TextButton(onClick = { showLyrics = true }) { Text(stringResource(R.string.player_lyrics), color = Red, style = MaterialTheme.typography.labelSmall) }
+                TextButton(onClick = { showQueue = true }) { 
+                    Text(stringResource(R.string.queue_title), color = Color.White, style = MaterialTheme.typography.labelSmall) 
+                }
+                TextButton(onClick = { showLyrics = true }) { 
+                    Text(stringResource(R.string.player_lyrics), color = Red, style = MaterialTheme.typography.labelSmall) 
+                }
             }
         }
 
-        // Таймер удаления
         if (pendingDeleteTrack != null) {
             DeletionTimerSnackbar(
                 track = pendingDeleteTrack!!,
@@ -269,10 +281,9 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
         }
     }
 
-    // (Диалоги: EQ, Speed, Menu, Playlist, Rename, Delete)
     if (showEq) { EqDialog(onClose = { showEq = false }) }
-    if (showSpeed) SpeedDialog(currentSpeed = state.speed, onSpeedSelected = { vm.setSpeed(it); showSpeed = false }, onClose = { showSpeed = false })
     
+    // Меню трех точек (с добавлением Скорости)
     if (showTrackMenu) {
         val currentTrack = lib.find { it.id == state.currentTrackId }
         if (currentTrack != null) {
@@ -282,6 +293,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     Column {
                         TextButton(onClick = { showTrackMenu = false; showAddToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
                         TextButton(onClick = { vm.addToQueue(listOf(currentTrack)); showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }
+                        TextButton(onClick = { showTrackMenu = false; showSpeed = true }, modifier = Modifier.fillMaxWidth()) { Text("Скорость воспроизведения", color = Color.White) }
                         TextButton(onClick = { trackToRename = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_rename), color = Color.White) }
                         TextButton(onClick = { trackToDelete = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_delete), color = Red) }
                     }
@@ -290,6 +302,9 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             )
         }
     }
+    
+    // Остальные диалоги (плейлисты, переименование, удаление, скорость)
+    if (showSpeed) SpeedDialog(currentSpeed = state.speed, onSpeedSelected = { vm.setSpeed(it); showSpeed = false }, onClose = { showSpeed = false })
     
     if (showAddToPlaylist) {
         if (showCreateFromAdd) {
@@ -340,7 +355,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ОБНОВЛЕННЫЙ ЭКРАН КАРАОКЕ
+// ЭКРАН КАРАОКЕ (С настройкой 0.1с, центрированием и длинными строками)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -355,7 +370,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
 
     val listState = rememberLazyListState()
 
-    // Отслеживаем, листает ли пользователь экран вручную
     var isUserScrolling by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         snapshotFlow { listState.isScrollInProgress }
@@ -386,7 +400,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     val effectivePos = (currentPos - offsetMs).coerceAtLeast(0)
     val activeIndex = remember(displayLyrics, effectivePos) { displayLyrics.indexOfLast { it.timeMs <= effectivePos } }
 
-    // Обратный отсчет
     var countdown by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(displayLyrics, effectivePos) {
         if (displayLyrics.isNotEmpty() && activeIndex == -1) {
@@ -402,10 +415,16 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // Авто-скролл только если пользователь не листает сам
+    // Скролл ровно по центру экрана
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
-            listState.animateScrollToItem(activeIndex, scrollOffset = -400)
+            // Вычисляем высоту экрана, чтобы строка была по центру
+            val itemInfo = listState.layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
+            val itemHeight = itemInfo?.size ?: 100
+            val viewportHeight = listState.layoutInfo.viewportSize.height
+            val targetOffset = -((viewportHeight / 2) - (itemHeight / 2))
+            
+            listState.animateScrollToItem(activeIndex, scrollOffset = targetOffset)
         }
     }
 
@@ -438,7 +457,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 }
             }
 
-            // Панель настройки задержки
+            // Панель настройки задержки (0.1с)
             AnimatedVisibility(visible = showOffsetControls && !isEditing) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
@@ -452,8 +471,8 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         )
                         Spacer(Modifier.height(8.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = { vm.setLyricsOffset(offsetMs - 500) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                                Text("-0.5s", color = Color.White)
+                            Button(onClick = { vm.setLyricsOffset(offsetMs - 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                                Text("-0.1s", color = Color.White)
                             }
                             Slider(
                                 value = offsetMs.toFloat(),
@@ -462,8 +481,8 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
                                 modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
                             )
-                            Button(onClick = { vm.setLyricsOffset(offsetMs + 500) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                                Text("+0.5s", color = Color.White)
+                            Button(onClick = { vm.setLyricsOffset(offsetMs + 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                                Text("+0.1s", color = Color.White)
                             }
                         }
                     }
@@ -525,7 +544,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                             }
                         }
 
-                        // Обратный отсчет
                         if (countdown != null) {
                             Text(
                                 text = countdown.toString(),
@@ -550,7 +568,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     }
 }
 
-// (Функции QueueScreen, SpeedDialog, EqDialog, formatLyrics, fmt)
+// (Остальные функции без изменений)
 @Composable
 fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
     var dragOffsetX by remember { mutableStateOf(0f) }
