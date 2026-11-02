@@ -18,29 +18,51 @@ object LyricsLoader {
                 val proj = arrayOf(MediaStore.Audio.Media.DATA)
                 val path = context.contentResolver
                     .query(uri, proj, null, null, null)
-                    ?.use { if (it.moveToFirst()) it.getString(0) else null }
-                    ?: return@withContext emptyList()
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val columnIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                            if (columnIndex != -1) cursor.getString(columnIndex) else null
+                        } else null
+                    }
 
+                if (path == null) return@withContext emptyList()
+
+                // Ищем файл .lrc рядом с аудиофайлом
                 val lrcFile = File(path.replaceAfterLast('.', "lrc"))
                 if (!lrcFile.exists()) return@withContext emptyList()
+
                 parse(lrcFile.readText())
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                e.printStackTrace()
                 emptyList()
             }
         }
 
-    private val timeRegex = Regex("""\[(\d{2}):(\d{2})\.(\d{2,3})]""")
+    // Улучшенный Regex: поддерживает [mm:ss.xx], [mm:ss.xxx] и [mm:ss]
+    private val timeRegex = Regex("""\[(\d{2}):(\d{2})(?:[.:](\d{2,3}))?]""")
 
     fun parse(raw: String): List<LyricLine> {
         val out = mutableListOf<LyricLine>()
+        
         raw.lineSequence().forEach { line ->
-            val m = timeRegex.find(line) ?: return@forEach
-            val (min, sec, msPart) = m.destructured
-            val ms = msPart.toLong().let { if (it < 100) it * 10 else it }
-            val timeMs = min.toLong() * 60_000 + sec.toLong() * 1_000 + ms
-            val text = line.substring(m.range.last + 1).trim()
-            if (text.isNotEmpty()) out += LyricLine(timeMs, text)
+            val match = timeRegex.find(line)
+            if (match != null) {
+                val (min, sec, msPart) = match.destructured
+                // Если миллисекунд нет, считаем их нулем
+                val ms = if (msPart.isNotEmpty()) {
+                    msPart.toLong().let { if (it < 100) it * 10 else it }
+                } else 0L
+                
+                val timeMs = min.toLong() * 60_000 + sec.toLong() * 1_000 + ms
+                val text = line.substring(match.range.last + 1).trim()
+                
+                // Отсеиваем пустые строки и метаданные (начинающиеся с [)
+                if (text.isNotEmpty() && !text.startsWith("[")) {
+                    out += LyricLine(timeMs, text)
+                }
+            }
         }
+        // Сортируем по времени на всякий случай (если в LRC был беспорядок)
         return out.sortedBy { it.timeMs }
     }
 }
