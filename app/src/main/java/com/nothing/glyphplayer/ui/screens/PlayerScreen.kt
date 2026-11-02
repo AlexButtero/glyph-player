@@ -156,7 +156,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // НАДПИСЬ ПЛЕЙЛИСТА (ЛАКОНИЧНАЯ)
+            // НАДПИСЬ ПЛЕЙЛИСТА
             state.playlistName?.let { name ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -397,7 +397,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ИСПРАВЛЕНО МЕРЦАНИЕ И ЦЕНТРИРОВАНИЕ)
+// ЭКРАН КАРАОКЕ
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -457,10 +457,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // ЖЕСТКИЙ ЦЕНТРАЛЬНЫЙ СКРОЛЛ
+    // ЦЕНТРАЛЬНЫЙ СКРОЛЛ
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
-            // Ждем, пока layout не будет готов
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
             
             val layoutInfo = listState.layoutInfo
@@ -468,11 +467,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
             
             if (itemInfo != null) {
-                // Вычисляем точное смещение для центра
                 val centerOffset = -(viewportHeight / 2) + (itemInfo.size / 2)
                 listState.animateScrollToItem(activeIndex, centerOffset)
             } else {
-                // Если строка вне экрана, прокручиваем к ней (она окажется сверху, потом сработает следующий тик)
                 listState.animateScrollToItem(activeIndex)
             }
         }
@@ -569,7 +566,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 val color by animateColorAsState(if (isActive) Red else Color.Gray, label = "color")
                                 val scale by animateFloatAsState(if (isActive) 1.1f else 1f, label = "scale")
                                 
-                                // УБРАН BLUR. Используем только Alpha для плавности.
+                                // УБРАН BLUR
                                 val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.6f; distance == 2 -> 0.4f; else -> 0.2f }
 
                                 Text(
