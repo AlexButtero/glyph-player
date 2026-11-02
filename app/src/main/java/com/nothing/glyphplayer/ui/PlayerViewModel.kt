@@ -69,6 +69,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _lyrics = MutableStateFlow<List<LyricLine>>(emptyList())
     val lyrics: StateFlow<List<LyricLine>> = _lyrics
     
+    private val _lyricsOffsetMs = MutableStateFlow(prefs.getLong("lyrics_offset", 0L))
+    val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs
+
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning
 
@@ -164,6 +167,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setLyricsOffset(offsetMs: Long) {
+        _lyricsOffsetMs.value = offsetMs
+        prefs.edit().putLong("lyrics_offset", offsetMs).apply()
+    }
+
     fun handleBackButton() {
         val now = System.currentTimeMillis()
         if (now - lastBackPressTime < 500) { prev(); lastBackPressTime = 0L } 
@@ -194,7 +202,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun seekToIndex(uiIndex: Int) {
         try {
             val c = controller ?: return
-            // Проверяем границы, чтобы не вызвать IllegalSeekPositionException
             if (uiIndex in 0 until c.mediaItemCount) {
                 c.seekToDefaultPosition(uiIndex)
                 c.play()
@@ -293,7 +300,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val c = controller ?: return
             val items = tracks.map { it.toMediaItem() }
             
-            // Безопасный расчет индекса для вставки
             val currentIdx = c.currentMediaItemIndex.coerceAtLeast(0)
             val insertIndex = (currentIdx + 1).coerceAtMost(c.mediaItemCount)
             
