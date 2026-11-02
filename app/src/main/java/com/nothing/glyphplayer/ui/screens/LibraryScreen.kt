@@ -127,7 +127,6 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                     )
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { 
-                            // Просто меняем визуальный порядок, не запуская плеер
                             isShuffled = true
                             shuffleOrder = lib.map { it.id }.shuffled()
                         }) { 
