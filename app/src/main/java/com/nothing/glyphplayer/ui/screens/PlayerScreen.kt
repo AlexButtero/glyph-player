@@ -54,6 +54,7 @@ import com.nothing.glyphplayer.playback.EqualizerManager
 import com.nothing.glyphplayer.playback.LyricLine
 import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.ui.PlayerViewModel
+import com.nothing.glyphplayer.ui.getMainArtist
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -330,7 +331,75 @@ fun PlayerScreen(
         }
     }
 
-    // Остальные диалоги без изменений
+    if (showEq) { EqDialog(onClose = { showEq = false }) }
+    
+    if (showTrackMenu) {
+        val currentTrack = lib.find { it.id == state.currentTrackId }
+        if (currentTrack != null) {
+            AlertDialog(
+                onDismissRequest = { showTrackMenu = false }, title = { Text(currentTrack.title, color = Color.White) },
+                text = {
+                    Column {
+                        TextButton(onClick = { showTrackMenu = false; showAddToPlaylist = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }
+                        TextButton(onClick = { vm.addToQueue(listOf(currentTrack)); showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }
+                        TextButton(onClick = { showTrackMenu = false; showSpeed = true }, modifier = Modifier.fillMaxWidth()) { Text("Скорость воспроизведения", color = Color.White) }
+                        TextButton(onClick = { trackToRename = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_rename), color = Color.White) }
+                        TextButton(onClick = { trackToDelete = currentTrack; showTrackMenu = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.menu_delete), color = Red) }
+                    }
+                },
+                confirmButton = {}, dismissButton = { TextButton(onClick = { showTrackMenu = false }) { Text(stringResource(R.string.player_close), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+            )
+        }
+    }
+    
+    if (showSpeed) SpeedDialog(currentSpeed = state.speed, onSpeedSelected = { vm.setSpeed(it); showSpeed = false }, onClose = { showSpeed = false })
+    
+    if (showAddToPlaylist) {
+        if (showCreateFromAdd) {
+            PlaylistEditorDialog(
+                initialName = "",
+                onSave = { name, desc, poster ->
+                    val trackToAdd = state.currentTrackId
+                    vm.createPlaylist(name, desc, poster) { newId ->
+                        if (trackToAdd != null) vm.addMultipleToPlaylist(newId, listOf(trackToAdd))
+                    }
+                    showAddToPlaylist = false
+                    showCreateFromAdd = false
+                },
+                onDismiss = { showCreateFromAdd = false }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showAddToPlaylist = false }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
+                text = { 
+                    Column { 
+                        playlists.forEach { p -> TextButton(onClick = { state.currentTrackId?.let { vm.addMultipleToPlaylist(p.id, listOf(it)) }; showAddToPlaylist = false }) { Text(p.name, color = Color.White) } }
+                        TextButton(onClick = { showCreateFromAdd = true }) { Text("+ Создать новый", color = Red) }
+                    } 
+                },
+                confirmButton = {}, dismissButton = { TextButton(onClick = { showAddToPlaylist = false; showCreateFromAdd = false }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+            )
+        }
+    }
+
+    trackToRename?.let { track ->
+        var newTitle by remember { mutableStateOf(track.title) }
+        AlertDialog(
+            onDismissRequest = { trackToRename = null }, title = { Text(stringResource(R.string.dialog_rename_title), color = Color.White) },
+            text = { OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) },
+            confirmButton = { TextButton(onClick = { if (newTitle.isNotBlank()) { vm.renameTrack(track, newTitle); trackToRename = null } }) { Text(stringResource(R.string.action_save), color = Red) } },
+            dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+        )
+    }
+
+    trackToDelete?.let { track ->
+        AlertDialog(
+            onDismissRequest = { trackToDelete = null }, title = { Text(stringResource(R.string.dialog_delete_title), color = Color.White) },
+            text = { Text(stringResource(R.string.dialog_delete_message), color = Color.Gray) },
+            confirmButton = { TextButton(onClick = { pendingDeleteTrack = track; trackToDelete = null }) { Text(stringResource(R.string.action_delete), color = Red) } },
+            dismissButton = { TextButton(onClick = { trackToDelete = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+        )
+    }
 }
 
 // ============================================================================
@@ -578,4 +647,81 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     }
 }
 
-// QueueScreen, SpeedDialog, EqDialog без изменений
+@Composable
+fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+        detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
+    }) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } }
+            Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
+            Spacer(Modifier.height(16.dp))
+            
+            val displayQueue = remember(queue, currentIndex) {
+                if (queue.isNotEmpty() && currentIndex in queue.indices) {
+                    val firstPart = queue.subList(currentIndex, queue.size).toList()
+                    val secondPart = queue.subList(0, currentIndex).toList()
+                    firstPart + secondPart
+                } else queue
+            }
+
+            LazyColumn(Modifier.fillMaxSize()) {
+                itemsIndexed(displayQueue) { uiIndex, item ->
+                    val realIndex = if (queue.isNotEmpty()) (currentIndex.coerceAtLeast(0) + uiIndex) % queue.size else 0
+                    val isCurrent = uiIndex == 0 
+
+                    Row(Modifier.fillMaxWidth().clickable { onSelect(realIndex) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.mediaMetadata.title?.toString() ?: "Unknown", color = if (isCurrent) Red else Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text(item.mediaMetadata.artist?.toString() ?: "", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (isCurrent) Text(stringResource(R.string.queue_now_playing), color = Red, style = MaterialTheme.typography.labelSmall)
+                    }
+                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeedDialog(currentSpeed: Float, onSpeedSelected: (Float) -> Unit, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose, title = { Text(stringResource(R.string.player_speed_title), color = Color.White) },
+        text = { Column { listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { sp -> TextButton(onClick = { onSpeedSelected(sp) }, modifier = Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${sp}x", color = if (currentSpeed == sp) Red else Color.White); if (currentSpeed == sp) Text("✓", color = Red) } } } } },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
+    )
+}
+
+@Composable
+private fun EqDialog(onClose: () -> Unit) {
+    val bands = EqualizerManager.bandCount()
+    val isAvailable = EqualizerManager.isAvailable()
+    val range = EqualizerManager.bandLevelRange()
+    var levels by remember { mutableStateOf(List(bands) { EqualizerManager.getBandLevel(it.toShort()).toFloat() }) }
+    
+    AlertDialog(
+        onDismissRequest = onClose, title = { Text(stringResource(R.string.player_equalizer), color = Color.White) },
+        text = { 
+            Column { 
+                if (!isAvailable) {
+                    Text("Эквалайзер недоступен. Включите любой трек, чтобы активировать аудиосессию.", color = Color.Gray)
+                } else {
+                    levels.forEachIndexed { i, lv -> 
+                        Text(stringResource(R.string.player_band, i + 1), color = Color.Gray, style = MaterialTheme.typography.labelSmall); 
+                        Slider(value = lv, onValueChange = { levels = levels.toMutableList().also { l -> l[i] = it }; EqualizerManager.setBandLevel(i.toShort(), it.toInt().toShort()) }, valueRange = range.first.toFloat()..range.second.toFloat(), colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red)) 
+                    } 
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.player_close), color = Red) } }, containerColor = Color(0xFF121212)
+    )
+}
+
+private fun formatLyrics(text: String): String = text.trim()
+
+private fun fmt(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
+}
