@@ -115,7 +115,7 @@ fun PlayerScreen(
     }
 
     val currentArtistPoster = state.currentTrackId?.let { trackPosters[it] }
-    val currentPoster = state.artUri ?: currentArtistPoster
+    val currentPoster = if (!state.artUri.isNullOrBlank()) state.artUri else currentArtistPoster
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // РАЗМЫТЫЙ ФОН
@@ -233,7 +233,7 @@ fun PlayerScreen(
                 val prevIndex = state.currentIndex - 1
                 if (prevIndex >= 0 && prevIndex < state.queue.size) {
                     val prevItem = state.queue[prevIndex]
-                    val prevArt = prevItem.mediaMetadata.artworkUri 
+                    val prevArt = prevItem.mediaMetadata.artworkUri?.toString()?.takeIf { it.isNotBlank() } 
                         ?: trackPosters[prevItem.mediaId.toLongOrNull()]
                     if (prevArt != null) {
                         AsyncImage(
@@ -250,7 +250,7 @@ fun PlayerScreen(
                 val nextIndex = state.currentIndex + 1
                 if (nextIndex >= 0 && nextIndex < state.queue.size) {
                     val nextItem = state.queue[nextIndex]
-                    val nextArt = nextItem.mediaMetadata.artworkUri 
+                    val nextArt = nextItem.mediaMetadata.artworkUri?.toString()?.takeIf { it.isNotBlank() } 
                         ?: trackPosters[nextItem.mediaId.toLongOrNull()]
                     if (nextArt != null) {
                         AsyncImage(
