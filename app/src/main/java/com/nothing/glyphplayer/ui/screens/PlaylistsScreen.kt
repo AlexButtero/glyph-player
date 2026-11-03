@@ -1,7 +1,5 @@
 package com.nothing.glyphplayer.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,7 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -92,7 +89,6 @@ fun PlaylistsScreen(vm: PlayerViewModel = viewModel(), onPlaylistClick: () -> Un
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(playlistTracks, key = { it.id }) { track ->
                         Row(Modifier.fillMaxWidth().clickable { 
-                            // ИСПРАВЛЕНО: Передаем имя плейлиста
                             vm.playTracks(playlistTracks, playlistTracks.indexOf(track), openedPlaylist!!.name)
                             onPlaylistClick() 
                         }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
