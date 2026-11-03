@@ -28,7 +28,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,7 +56,6 @@ import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -180,7 +178,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
+            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ (УВЕЛИЧЕНА)
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -189,15 +187,15 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                         .clickable { showLyrics = true },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = currentLine?.text ?: "",
                         color = Red,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp, // УВЕЛИЧЕНО С 20 ДО 26
+                        fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
@@ -407,7 +405,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ИДЕАЛЬНОЕ ЦЕНТРИРОВАНИЕ И СТИЛЬ SPOTIFY/YANDEX)
+// ЭКРАН КАРАОКЕ
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -427,7 +425,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
 
     var isUserScrolling by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        // Отслеживаем только пальцевые свайпы, чтобы автопрокрутка не отключалась при программном скролле
         listState.interactionSource.interactions.collect { interaction ->
             if (interaction is DragInteraction.Start) {
                 isUserScrolling = true
@@ -470,7 +467,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // Прокрутка к активному элементу
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
             listState.animateScrollToItem(activeIndex)
@@ -488,7 +484,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 )
             }
     ) {
-        // ОСНОВНОЙ КОНТЕНТ (Текст караоке или редактор)
         if (isEditing) {
             Column(
                 Modifier
@@ -512,16 +507,14 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 )
             }
         } else if (displayLyrics.isNotEmpty()) {
-            // СПИСОК НА ВЕСЬ ЭКРАН (Идеальное центрирование благодаря contentPadding)
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = (screenHeight / 2) - 32.dp) // Вычитаем половину высоты строки для точного центра
+                contentPadding = PaddingValues(vertical = (screenHeight / 2) - 32.dp)
             ) {
                 itemsIndexed(displayLyrics) { index, line ->
                     val isActive = index == activeIndex
                     
-                    // Плавное изменение цвета, размера и прозрачности
                     val textColor by animateColorAsState(
                         targetValue = if (isActive) Red else Color.Gray,
                         animationSpec = tween(200),
@@ -576,7 +569,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             }
         }
 
-        // ВЕРХНЯЯ ПАНЕЛЬ (Поверх контента)
         Row(
             Modifier
                 .fillMaxWidth()
@@ -601,7 +593,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             }
         }
 
-        // ПАНЕЛЬ СМЕЩЕНИЯ (Под шапкой)
         AnimatedVisibility(
             visible = showOffsetControls && !isEditing,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp, start = 16.dp, end = 16.dp)
@@ -636,7 +627,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             }
         }
 
-        // ТАЙМЕР ОТСЧЕТА
         if (countdown != null && !isEditing) {
             Text(
                 text = countdown.toString(),
