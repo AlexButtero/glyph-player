@@ -1,5 +1,6 @@
 package com.nothing.glyphplayer.ui.screens
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
@@ -24,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -164,7 +166,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                         onClick = {
                                             if (selectedTracks.isEmpty()) { 
                                                 if (state.currentTrackId == track.id) onTrackClick()
-                                                else { vm.playTracks(filtered, idx, "Мои треки"); onTrackClick() } // Передаем имя
+                                                else { vm.playTracks(filtered, idx, "Мои треки"); onTrackClick() }
                                             } else { 
                                                 selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
                                             }
@@ -300,12 +302,22 @@ fun PlaylistEditorDialog(
     onSave: (String, String?, String?) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(initialName) }
     var desc by remember { mutableStateOf(initialDesc) }
     var poster by remember { mutableStateOf(initialPoster) }
     
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) poster = uri.toString()
+    // ИСПРАВЛЕНО: Используем OpenDocument для сохранения постоянных разрешений
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) { }
+            poster = uri.toString()
+        }
     }
 
     AlertDialog(
@@ -325,7 +337,7 @@ fun PlaylistEditorDialog(
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                Button(onClick = { imagePicker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
                     Text(if (poster == null) "Выбрать постер" else "Постер выбран", color = Color.White)
                 }
             }
