@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -178,7 +177,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ (УВЕЛИЧЕНА)
+            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ (УВЕЛИЧЕНА ДО 30)
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -194,7 +193,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     Text(
                         text = currentLine?.text ?: "",
                         color = Red,
-                        fontSize = 26.sp, // УВЕЛИЧЕНО С 20 ДО 26
+                        fontSize = 30.sp,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
@@ -405,7 +404,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ
+// ЭКРАН КАРАОКЕ (ИСПРАВЛЕНО ЦЕНТРИРОВАНИЕ)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -417,9 +416,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     
     val lyricsFromFile = vm.lyrics.collectAsState().value
     val offsetMs by vm.lyricsOffsetMs.collectAsState()
-    
-    val configuration = LocalConfiguration.current
-    val screenHeight = configuration.screenHeightDp.dp
 
     val listState = rememberLazyListState()
 
@@ -507,50 +503,55 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 )
             }
         } else if (displayLyrics.isNotEmpty()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = (screenHeight / 2) - 32.dp)
-            ) {
-                itemsIndexed(displayLyrics) { index, line ->
-                    val isActive = index == activeIndex
-                    
-                    val textColor by animateColorAsState(
-                        targetValue = if (isActive) Red else Color.Gray,
-                        animationSpec = tween(200),
-                        label = "textColor"
-                    )
-                    val scale by animateFloatAsState(
-                        targetValue = if (isActive) 1.15f else 1f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
-                        label = "scale"
-                    )
-                    val alpha by animateFloatAsState(
-                        targetValue = if (isActive) 1f else 0.5f,
-                        animationSpec = tween(200),
-                        label = "alpha"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp, horizontal = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = line.text,
-                            color = textColor.copy(alpha = alpha),
-                            fontSize = 18.sp,
-                            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Normal,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .graphicsLayer { scaleX = scale; scaleY = scale }
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onDoubleTap = { vm.seekTo(line.timeMs) }
-                                    )
-                                }
+            // ИСПОЛЬЗУЕМ BoxWithConstraints ДЛЯ ТОЧНОГО ЦЕНТРИРОВАНИЯ
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val halfHeight = maxHeight / 2
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    // Отступ ровно половина экрана минус половина высоты текста
+                    contentPadding = PaddingValues(top = halfHeight - 32.dp, bottom = halfHeight)
+                ) {
+                    itemsIndexed(displayLyrics) { index, line ->
+                        val isActive = index == activeIndex
+                        
+                        val textColor by animateColorAsState(
+                            targetValue = if (isActive) Red else Color.Gray,
+                            animationSpec = tween(200),
+                            label = "textColor"
                         )
+                        val scale by animateFloatAsState(
+                            targetValue = if (isActive) 1.15f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
+                            label = "scale"
+                        )
+                        val alpha by animateFloatAsState(
+                            targetValue = if (isActive) 1f else 0.5f,
+                            animationSpec = tween(200),
+                            label = "alpha"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp, horizontal = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = line.text,
+                                color = textColor.copy(alpha = alpha),
+                                fontSize = 18.sp,
+                                fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Normal,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onDoubleTap = { vm.seekTo(line.timeMs) }
+                                        )
+                                    }
+                            )
+                        }
                     }
                 }
             }
