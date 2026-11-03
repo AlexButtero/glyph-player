@@ -33,8 +33,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun GlyphApp() {
-    // ВАЖНО: Единый ViewModel для всего приложения (уровень Activity)
     val vm: PlayerViewModel = viewModel()
+    val artistPosters by vm.artistPosters.collectAsState()
     
     val nav = rememberNavController()
     val pagerState = rememberPagerState(pageCount = { 4 })
@@ -73,14 +73,14 @@ fun GlyphApp() {
                         beyondViewportPageCount = 1 
                     ) { page ->
                         when (page) {
-                            0 -> LibraryScreen(vm = vm, onTrackClick = { nav.navigate("PLAYER") })
-                            1 -> ArtistsScreen(vm = vm, onTrackClick = { nav.navigate("PLAYER") })
-                            2 -> PlaylistsScreen(vm = vm, onPlaylistClick = { nav.navigate("PLAYER") })
+                            0 -> LibraryScreen(vm = vm, artistPosters = artistPosters, onTrackClick = { nav.navigate("PLAYER") })
+                            1 -> ArtistsScreen(vm = vm, artistPosters = artistPosters, onTrackClick = { nav.navigate("PLAYER") })
+                            2 -> PlaylistsScreen(vm = vm, artistPosters = artistPosters, onPlaylistClick = { nav.navigate("PLAYER") })
                             3 -> SettingsScreen(vm = vm)
                         }
                     }
                 }
-                composable("PLAYER") { PlayerScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("PLAYER") { PlayerScreen(vm = vm, artistPosters = artistPosters, onBack = { nav.popBackStack() }) }
             }
         }
     }
