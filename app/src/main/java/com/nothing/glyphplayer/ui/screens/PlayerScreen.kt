@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -140,10 +141,29 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Шапка
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
+            // ВЕРХНЯЯ ПАНЕЛЬ (VK STYLE)
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Левая кнопка
+                IconButton(onClick = onBack) { 
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) 
+                }
                 
+                // Центральный текст
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 1.sp)
+                    Text(
+                        text = state.playlistName ?: "Мои треки", 
+                        color = Color.White, 
+                        fontSize = 16.sp, 
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                // Правые кнопки
                 Row {
                     IconButton(onClick = { showEq = true }) { 
                         Icon(Icons.Outlined.Tune, contentDescription = "Equalizer", tint = Color.White) 
@@ -155,20 +175,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             }
             
             Spacer(Modifier.height(8.dp))
-
-            // НАДПИСЬ ПЛЕЙЛИСТА
-            state.playlistName?.let { name ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                ) {
-                    Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 1.sp)
-                    Spacer(Modifier.width(6.dp))
-                    Text("•", color = Color.Gray, fontSize = 10.sp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            }
 
             // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
             AnimatedVisibility(
@@ -397,7 +403,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ
+// ЭКРАН КАРАОКЕ (МЕРЦАНИЕ УБРАНО, ЦЕНТРИРОВАНИЕ ЧЕРЕЗ SPACER)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -409,6 +415,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     
     val lyricsFromFile = vm.lyrics.collectAsState().value
     val offsetMs by vm.lyricsOffsetMs.collectAsState()
+    
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
 
     val listState = rememberLazyListState()
 
@@ -457,21 +466,10 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // ЦЕНТРАЛЬНЫЙ СКРОЛЛ
+    // Просто скроллим к активному элементу. Благодаря Spacer сверху он будет по центру.
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
-            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
-            
-            val layoutInfo = listState.layoutInfo
-            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == activeIndex }
-            
-            if (itemInfo != null) {
-                val centerOffset = -(viewportHeight / 2) + (itemInfo.size / 2)
-                listState.animateScrollToItem(activeIndex, centerOffset)
-            } else {
-                listState.animateScrollToItem(activeIndex)
-            }
+            listState.animateScrollToItem(activeIndex)
         }
     }
 
@@ -557,31 +555,29 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 200.dp)
                         ) {
+                            // ВЕРХНИЙ ОТСТУП - ЦЕНТРИРУЕТ АКТИВНУЮ СТРОКУ
+                            item { Spacer(modifier = Modifier.height(screenHeight / 2)) }
+                            
                             itemsIndexed(displayLyrics) { index, line ->
                                 val isActive = index == activeIndex
-                                val distance = abs(index - activeIndex)
                                 
-                                val color by animateColorAsState(if (isActive) Red else Color.Gray, label = "color")
-                                val scale by animateFloatAsState(if (isActive) 1.1f else 1f, label = "scale")
-                                
-                                // УБРАН BLUR
-                                val alpha = if (isUserScrolling) 1f else when { isActive -> 1f; distance == 1 -> 0.6f; distance == 2 -> 0.4f; else -> 0.2f }
+                                // Только цвет меняется плавно. Без мерцания.
+                                val color by animateColorAsState(
+                                    targetValue = if (isActive) Red else Color.Gray,
+                                    animationSpec = tween(200),
+                                    label = "color"
+                                )
 
                                 Text(
                                     text = line.text,
-                                    color = color.copy(alpha = alpha),
-                                    fontSize = 18.sp,
+                                    color = color,
+                                    fontSize = 18.sp, // ФИКСИРОВАННЫЙ РАЗМЕР
                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 16.dp, horizontal = 16.dp)
-                                        .graphicsLayer {
-                                            scaleX = scale
-                                            scaleY = scale
-                                        }
                                         .pointerInput(Unit) {
                                             detectTapGestures(
                                                 onDoubleTap = { 
@@ -591,6 +587,9 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                         }
                                 )
                             }
+                            
+                            // НИЖНИЙ ОТСТУП
+                            item { Spacer(modifier = Modifier.height(screenHeight / 2)) }
                         }
 
                         if (countdown != null) {
