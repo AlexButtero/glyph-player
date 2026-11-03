@@ -69,6 +69,7 @@ fun PlayerScreen(
     val positionMs by vm.positionMs.collectAsState()
     val lyrics by vm.lyrics.collectAsState()
     val lyricsOffsetMs by vm.lyricsOffsetMs.collectAsState()
+    val isWhiteLyrics by vm.isWhiteLyrics.collectAsState()
     val lib by vm.library.collectAsState()
     val playlists by vm.playlists.collectAsState()
     
@@ -107,7 +108,7 @@ fun PlayerScreen(
     }
 
     if (showLyrics) { 
-        KaraokeLyricsScreen(vm, state.currentTrackId, effectivePosition, onBack = { showLyrics = false }); return 
+        KaraokeLyricsScreen(vm, state.currentTrackId, effectivePosition, isWhiteLyrics, onBack = { showLyrics = false }); return 
     }
     if (showQueue) { 
         val uiIndex = state.displayQueue.indexOfFirst { it.mediaId == state.currentTrackId?.toString() }.coerceAtLeast(0)
@@ -206,7 +207,7 @@ fun PlayerScreen(
                 ) {
                     Text(
                         text = currentLine?.text ?: "",
-                        color = Red,
+                        color = if (isWhiteLyrics) Color.White else Red,
                         fontSize = 30.sp,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
@@ -414,8 +415,17 @@ fun PlayerScreen(
     }
 }
 
+// ============================================================================
+// ЭКРАН КАРАОКЕ (С ФИКСАЦИЕЙ ПЕРЕНОСОВ И СМЕНОЙ ЦВЕТА)
+// ============================================================================
 @Composable
-fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
+fun KaraokeLyricsScreen(
+    vm: PlayerViewModel, 
+    trackId: Long?, 
+    currentPos: Long, 
+    isWhiteLyrics: Boolean,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     var manualText by remember { mutableStateOf("") }
     var isEditing by remember { mutableStateOf(false) }
@@ -476,6 +486,8 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             listState.animateScrollToItem(activeIndex)
         }
     }
+
+    val activeColor = if (isWhiteLyrics) Color.White else Red
 
     Box(
         modifier = Modifier
@@ -543,19 +555,22 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 .padding(vertical = 12.dp, horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
+                            // Невидимая подложка: всегда 22sp и ExtraBold, чтобы контейнер СРАЗУ знал правильный перенос
                             Text(
                                 text = line.text,
                                 color = Color.Transparent,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 20.sp,
+                                fontSize = 22.sp, // Немного больше видимого, чтобы точно влезло
+                                lineHeight = 28.sp, // Фиксируем высоту строки
                                 textAlign = TextAlign.Center
                             )
                             
                             Text(
                                 text = line.text,
-                                color = if (isActive) Red else Color.Gray,
+                                color = if (isActive) activeColor else Color.Gray,
                                 fontWeight = FontWeight(animatedWeight),
                                 fontSize = animatedFontSize.sp,
+                                lineHeight = 28.sp, // Такая же высота строки
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier
                                     .alpha(animatedAlpha)
@@ -597,7 +612,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (!isEditing) {
                     IconButton(onClick = { showOffsetControls = !showOffsetControls }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Offset", tint = if (showOffsetControls) Red else Color.Gray, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = if (showOffsetControls) Red else Color.Gray, modifier = Modifier.size(20.dp))
                     }
                     TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
                 } else {
@@ -618,6 +633,25 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    
+                    // ТОГГЛ ЦВЕТА ТЕКСТА
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Цвет текста:", color = Color.White, fontSize = 14.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Красный", color = Color.Gray, fontSize = 12.sp)
+                            Switch(
+                                checked = isWhiteLyrics,
+                                onCheckedChange = { vm.toggleLyricsColor() },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Red, uncheckedTrackColor = Color.DarkGray)
+                            )
+                            Text("Белый", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+
                     Text(
                         text = "Задержка текста: ${String.format("%.1f", offsetMs / 1000f)} сек",
                         color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
@@ -645,7 +679,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         if (countdown != null && !isEditing) {
             Text(
                 text = countdown.toString(),
-                color = Red,
+                color = activeColor,
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.Center)
