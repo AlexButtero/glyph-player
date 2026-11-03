@@ -51,6 +51,7 @@ data class PlaybackState(
     val speed: Float = 1f,
     val sleepSecondsRemaining: Int? = null,
     val queue: List<MediaItem> = emptyList(),
+    val displayQueue: List<MediaItem> = emptyList(), // Виртуальная очередь для UI
     val currentIndex: Int = 0,
     val playlistName: String? = "Мои треки"
 )
@@ -62,7 +63,6 @@ data class ArtistGroup(
     val posterUri: String?
 )
 
-// 1. Unicode-нормализация и очистка от мусора
 fun cleanArtistName(raw: String): String {
     var clean = raw
     try {
@@ -70,38 +70,23 @@ fun cleanArtistName(raw: String): String {
         clean = URLDecoder.decode(clean, "UTF-8")
     } catch (_: Exception) {}
 
-    // Удаляем квадратные скобки с мусором (например, [muzmo.ru])
     clean = clean.replace(Regex("\\[.*?\\]"), "")
-    
-    // Удаляем служебные пометки в круглых скобках
     clean = clean.replace(Regex("(?i)\\((official|prod\\.?|remix|version|audio|video|lyrics|music|clip|cover|instrumental).*?\\)"), "")
-    
-    // Удаляем эмодзи и прочие спецсимволы
     clean = clean.replace(Regex("[\\p{So}\\p{Cn}]"), "")
 
-    // Убираем лишние пробелы и кавычки по краям
     return clean.replace(Regex("\\s+"), " ").trim().removeSurrounding("\"").removeSurrounding("'")
 }
 
-// 2. Безопасное разделение артистов
 fun splitArtists(rawArtist: String?): List<String> {
     if (rawArtist.isNullOrBlank() || rawArtist.equals("<unknown>", true)) return emptyList()
-    
-    // Разделяем по feat, ft, vs (с любыми пробелами)
     var processed = rawArtist.replace(Regex("(?i)\\s*(feat\\.?|ft\\.?|vs\\.?)\\s*"), "|")
-    
-    // Запятые и амперсанды
     processed = processed.replace(Regex("\\s*[,&]\\s*"), "|")
-    
-    // Буквы x и с (кириллическая) как разделители, ТОЛЬКО если они стоят отдельным словом (с пробелами)
     processed = processed.replace(Regex("(?i)\\s+[xс]\\s+"), "|")
-    
     return processed.split("|")
         .map { cleanArtistName(it) }
         .filter { it.isNotBlank() && it.length > 1 && !it.equals("<unknown>", true) && !it.equals("unknown", true) }
 }
 
-// 5. Извлечение фитов из названия трека
 private val titleFeatRegex = Regex("(?i)\\(feat\\.?\\s+([^)]+)\\)")
 fun extractArtistsFromTitle(title: String): List<String> {
     val match = titleFeatRegex.find(title)
@@ -110,20 +95,16 @@ fun extractArtistsFromTitle(title: String): List<String> {
 
 fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
     val result = mutableListOf<Pair<String, Boolean>>()
-    
-    // Берем из тега артиста
     val fromMeta = splitArtists(track.artist)
     fromMeta.forEachIndexed { index, name -> result.add(name to (index == 0)) }
 
-    // Берем фиты из названия
     val fromTitle = extractArtistsFromTitle(track.title)
     fromTitle.forEach { name ->
         if (result.none { it.first.equals(name, ignoreCase = true) }) {
-            result.add(name to false) // фиты из названия всегда второстепенные
+            result.add(name to false)
         }
     }
 
-    // Если ничего нет, пробуем "Artist - Title"
     if (result.isEmpty() && track.title.contains(" - ")) {
         val parts = track.title.split(" - ", limit = 2)
         if (parts.size == 2) {
@@ -131,7 +112,6 @@ fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
             fromTitleDash.forEachIndexed { index, name -> result.add(name to (index == 0)) }
         }
     }
-    
     return if (result.isEmpty()) listOf("Unknown Artist" to true) else result
 }
 
@@ -156,20 +136,17 @@ fun resolveArtistKey(title: String?, artist: String?): String {
 }
 
 fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<String, ArtistGroup> {
-    // 1. Извлечение артистов
     val trackToRawArtists = mutableMapOf<Track, List<Pair<String, Boolean>>>()
     library.forEach { track -> trackToRawArtists[track] = extractArtistsWithPrimaryFlag(track) }
 
-    // 2. Частотный словарь имен (для выбора канонического названия)
     val rawNameCounts = mutableMapOf<String, Int>()
     trackToRawArtists.values.forEach { list ->
-        list.forEach { (name, _) -> 
+        list.forEach { (name, _) ->
             val cleaned = cleanArtistName(name)
-            rawNameCounts[cleaned] = (rawNameCounts[cleaned] ?: 0) + 1 
+            rawNameCounts[cleaned] = (rawNameCounts[cleaned] ?: 0) + 1
         }
     }
 
-    // 3. Группировка по нормализованному ключу
     val normalizedToRawNames = mutableMapOf<String, MutableSet<String>>()
     trackToRawArtists.values.forEach { list ->
         list.forEach { (name, _) ->
@@ -181,7 +158,6 @@ fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<
         }
     }
 
-    // 4. Выбор канонического имени (сначала по частоте, потом по длине)
     val normToCanonical = mutableMapOf<String, String>()
     normalizedToRawNames.forEach { (norm, rawNames) ->
         val best = rawNames.maxWithOrNull(
@@ -190,7 +166,6 @@ fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<
         normToCanonical[norm] = best
     }
 
-    // 5. Сборка итогового списка
     val result = mutableMapOf<String, MutableList<Pair<Track, Boolean>>>()
     trackToRawArtists.forEach { (track, artists) ->
         artists.forEach { (rawName, isPrimary) ->
@@ -220,7 +195,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
     val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
 
-    // КАРТА ПОСТЕРОВ
     val trackPosters: StateFlow<Map<Long, String>> = library
         .map { lib ->
             val artistToPoster = mutableMapOf<String, String>()
@@ -245,14 +219,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         .flowOn(Dispatchers.Default)
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
-    // КЭШИРОВАННЫЙ СПИСОК АРТИСТОВ
     val artistGroups: StateFlow<Map<String, ArtistGroup>> = combine(library, trackPosters) { lib, posters ->
         buildArtistsMap(lib, posters)
     }
     .flowOn(Dispatchers.Default)
     .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
-    // === НАВИГАЦИОННЫЙ СТЕЙТ ===
     private val _selectedArtist = MutableStateFlow<String?>(null)
     val selectedArtist: StateFlow<String?> = _selectedArtist
     fun selectArtist(name: String?) { _selectedArtist.value = name }
@@ -269,7 +241,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _lyrics = MutableStateFlow<List<LyricLine>>(emptyList())
     val lyrics: StateFlow<List<LyricLine>> = _lyrics
-    
+
     private val _lyricsOffsetMs = MutableStateFlow(prefs.getLong("lyrics_offset", 0L))
     val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs
 
@@ -281,7 +253,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
     private var lastBackPressTime = 0L
-    private var originalQueue: List<MediaItem> = emptyList()
+    private var originalQueue: List<MediaItem> = emptyList() // Исходная очередь
 
     private val lifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) { startPolling() }
@@ -302,11 +274,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val newController = future.get()
                 controller = newController
-                
+
                 newController.addListener(object : Player.Listener {
                     override fun onEvents(player: Player, events: Player.Events) = refresh()
                 })
-                
+
                 val c = newController
                 scope.launch(Dispatchers.IO) {
                     try {
@@ -316,13 +288,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                             if (initialQueue.isNotEmpty()) {
                                 originalQueue = initialQueue
                                 withContext(Dispatchers.Main) {
-                                    _state.update { it.copy(queue = initialQueue, currentIndex = c.currentMediaItemIndex) }
+                                    val isShuffle = c.shuffleModeEnabled
+                                    val display = if (isShuffle) initialQueue.shuffled() else initialQueue
+                                    _state.update { it.copy(queue = initialQueue, displayQueue = display, shuffle = isShuffle, currentIndex = c.currentMediaItemIndex) }
                                 }
                             }
                         }
                     } catch (_: Exception) {}
                 }
-                
+
                 refresh()
                 startPolling()
             } catch (_: Exception) { }
@@ -346,7 +320,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     currentIndex = c.currentMediaItemIndex
                 )
             }
-            
+
             val newId = _state.value.currentTrackId
             if (newId != null && newId != currentLyricsTrackId) {
                 currentLyricsTrackId = newId
@@ -387,7 +361,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun handleBackButton() {
         val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 500) { prev(); lastBackPressTime = 0L } 
+        if (now - lastBackPressTime < 500) { prev(); lastBackPressTime = 0L }
         else { seekTo(0); lastBackPressTime = now }
     }
 
@@ -398,10 +372,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 val posters = trackPosters.value
                 val items = tracks.map { track -> track.toMediaItem(posters[track.id]) }
                 if (items.isEmpty()) return@launch
-                
+
                 originalQueue = items
                 withContext(Dispatchers.Main) {
-                    _state.update { it.copy(shuffle = false, playlistName = playlistName, queue = items) }
+                    _state.update { it.copy(shuffle = false, playlistName = playlistName, queue = items, displayQueue = items) }
                     try {
                         c.shuffleModeEnabled = false
                         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
@@ -417,7 +391,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun next() { try { controller?.seekToNextMediaItem() } catch (_: Exception) {} }
     fun prev() { try { controller?.seekToPreviousMediaItem() } catch (_: Exception) {} }
     fun seekTo(ms: Long) { try { controller?.seekTo(ms); _positionMs.value = ms } catch (_: Exception) {} }
-    
+
     fun seekToIndex(uiIndex: Int) {
         try {
             val c = controller ?: return
@@ -427,43 +401,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             }
         } catch (_: Exception) { }
     }
-    
+
     fun toggleShuffle() {
         val c = controller ?: return
-        val currentItem = try { c.currentMediaItem } catch (e: Exception) { null } ?: return
-        val currentPos = try { c.currentPosition } catch (e: Exception) { 0L }
-        val wasPlaying = try { c.isPlaying } catch (e: Exception) { false }
         val newShuffle = !_state.value.shuffle
-
-        scope.launch(Dispatchers.Default) {
-            try {
-                val currentQueue = _state.value.queue.toMutableList()
-                if (currentQueue.isEmpty()) return@launch
-
-                if (newShuffle) {
-                    originalQueue = currentQueue.toList()
-                    currentQueue.shuffle()
-                } else {
-                    if (originalQueue.isNotEmpty()) {
-                        currentQueue.clear()
-                        currentQueue.addAll(originalQueue)
-                    }
-                }
-
-                val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
-                val finalQueue = if (newIndex != -1) currentQueue else currentQueue.apply { add(0, currentItem) }
-                val finalIndex = if (newIndex != -1) newIndex else 0
-                
-                withContext(Dispatchers.Main) {
-                    _state.update { it.copy(shuffle = newShuffle, queue = finalQueue, currentIndex = finalIndex) }
-                    try {
-                        c.setMediaItems(finalQueue, finalIndex, currentPos)
-                        c.prepare()
-                        if (wasPlaying) c.play()
-                    } catch (_: Exception) {}
-                }
-            } catch (_: Exception) {}
-        }
+        try {
+            if (newShuffle) {
+                if (originalQueue.isEmpty()) originalQueue = _state.value.queue
+                val shuffled = originalQueue.shuffled()
+                _state.update { it.copy(shuffle = true, displayQueue = shuffled) }
+                c.shuffleModeEnabled = true
+            } else {
+                _state.update { it.copy(shuffle = false, displayQueue = originalQueue) }
+                c.shuffleModeEnabled = false
+            }
+        } catch (_: Exception) {}
     }
 
     fun stopAndClear() {
@@ -488,9 +440,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         } catch (_: Exception) { }
     }
 
-    fun setSpeed(speed: Float) { 
+    fun setSpeed(speed: Float) {
         try { controller?.setPlaybackSpeed(speed) } catch (_: Exception) {}
-        _state.update { it.copy(speed = speed) } 
+        _state.update { it.copy(speed = speed) }
     }
 
     fun setSleepTimer(minutes: Int) {
@@ -499,79 +451,75 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(sleepSecondsRemaining = minutes * 60) }
         sleepJob = scope.launch {
             var remaining = minutes * 60
-            while (remaining > 0) { 
-                delay(1000); remaining--; _state.update { it.copy(sleepSecondsRemaining = remaining) } 
+            while (remaining > 0) {
+                delay(1000); remaining--; _state.update { it.copy(sleepSecondsRemaining = remaining) }
             }
             try { controller?.pause() } catch (_: Exception) {}
             _state.update { it.copy(sleepSecondsRemaining = null) }
         }
     }
 
-    fun addToQueue(tracks: List<Track>) { 
+    fun addToQueue(tracks: List<Track>) {
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
             try {
                 val posters = trackPosters.value
                 val items = tracks.map { track -> track.toMediaItem(posters[track.id]) }
-                val newQueue = _state.value.queue + items
                 withContext(Dispatchers.Main) {
                     try {
                         c.addMediaItems(items)
+                        val newQueue = _state.value.queue + items
                         originalQueue = originalQueue + items
-                        _state.update { it.copy(queue = newQueue) }
+                        val newDisplay = if (_state.value.shuffle) _state.value.displayQueue + items else originalQueue
+                        _state.update { it.copy(queue = newQueue, displayQueue = newDisplay) }
                     } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
         }
     }
-    
-    fun playNext(tracks: List<Track>) { 
+
+    fun playNext(tracks: List<Track>) {
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
             try {
                 val posters = trackPosters.value
                 val items = tracks.map { track -> track.toMediaItem(posters[track.id]) }
                 var insertIndex = 0
-                var currentId: String? = null
-                
+
                 withContext(Dispatchers.Main) {
                     try {
                         val currentIdx = c.currentMediaItemIndex.coerceAtLeast(0)
                         insertIndex = (currentIdx + 1).coerceAtMost(c.mediaItemCount)
-                        currentId = c.currentMediaItem?.mediaId
                     } catch (_: Exception) {}
                 }
 
-                val mutableOriginal = originalQueue.toMutableList()
-                val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
-                if (originalCurrentIndex != -1) {
-                    mutableOriginal.addAll((originalCurrentIndex + 1).coerceAtMost(mutableOriginal.size), items)
-                } else {
-                    mutableOriginal.addAll(items)
-                }
-                
-                val newQueue = _state.value.queue.toMutableList().apply {
-                    addAll(insertIndex.coerceAtMost(size), items)
-                }
-                
                 withContext(Dispatchers.Main) {
                     try {
                         c.addMediaItems(insertIndex, items)
-                        originalQueue = mutableOriginal
-                        _state.update { it.copy(queue = newQueue) }
+                        val newQueue = _state.value.queue.toMutableList().apply { addAll(insertIndex, items) }
+                        val newOriginal = originalQueue.toMutableList().apply { addAll(insertIndex, items) }
+                        originalQueue = newOriginal
+                        
+                        val newDisplay = if (_state.value.shuffle) {
+                            val displayIdx = _state.value.displayQueue.indexOfFirst { it.mediaId == c.currentMediaItem?.mediaId }.coerceAtLeast(0) + 1
+                            _state.value.displayQueue.toMutableList().apply { addAll(displayIdx.coerceAtMost(size), items) }
+                        } else {
+                            newOriginal
+                        }
+                        _state.update { it.copy(queue = newQueue, displayQueue = newDisplay) }
                     } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
         }
     }
-    
-    fun shuffleAll(playlistName: String = "Мои треки") { 
+
+    fun shuffleAll(playlistName: String = "Мои треки") {
         val lib = library.value
-        if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0, playlistName) 
+        if (lib.isNotEmpty()) playTracks(lib.shuffled(), 0, playlistName)
     }
 
-    fun scanLibrary(onDone: (Int) -> Unit) { 
-        scope.launch { 
+    fun scanLibrary(onDone: (Int) -> Unit) {
+        scope.launch {
             if (isFirstLaunch) _isScanning.value = true
             val n = repo.scanLibrary()
             if (isFirstLaunch) {
@@ -579,31 +527,31 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 isFirstLaunch = false
                 prefs.edit().putBoolean("is_first_launch", false).apply()
             }
-            withContext(Dispatchers.Main) { onDone(n) } 
-        } 
+            withContext(Dispatchers.Main) { onDone(n) }
+        }
     }
-    
+
     fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
     fun renameTrack(track: Track, newTitle: String) { scope.launch { repo.renameTrack(track, newTitle) } }
-    
-    fun createPlaylist(name: String, desc: String?, poster: String?, onDone: (Long) -> Unit = {}) { 
-        scope.launch { val id = repo.createPlaylist(name, desc, poster); withContext(Dispatchers.Main) { onDone(id) } } 
+
+    fun createPlaylist(name: String, desc: String?, poster: String?, onDone: (Long) -> Unit = {}) {
+        scope.launch { val id = repo.createPlaylist(name, desc, poster); withContext(Dispatchers.Main) { onDone(id) } }
     }
-    
+
     fun updatePlaylist(id: Long, name: String, desc: String?, poster: String?) {
         scope.launch { repo.updatePlaylist(id, name, desc, poster) }
     }
 
     fun deletePlaylist(id: Long) { scope.launch { repo.deletePlaylist(id) } }
     fun addMultipleToPlaylist(playlistId: Long, trackIds: List<Long>) { scope.launch { repo.addToPlaylist(playlistId, trackIds) } }
-    
-    fun playPlaylist(playlistId: Long, playlistName: String) { 
-        scope.launch { 
+
+    fun playPlaylist(playlistId: Long, playlistName: String) {
+        scope.launch {
             val tracks = repo.tracksOf(playlistId)
-            if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0, playlistName) } 
-        } 
+            if (tracks.isNotEmpty()) withContext(Dispatchers.Main) { playTracks(tracks, 0, playlistName) }
+        }
     }
-    
+
     fun getPlaylistTracks(playlistId: Long, onResult: (List<Track>) -> Unit) {
         scope.launch { val tracks = repo.tracksOf(playlistId); withContext(Dispatchers.Main) { onResult(tracks) } }
     }
@@ -615,7 +563,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         try {
             ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
         } catch (_: Exception) { }
-        
+
         controller?.release(); controller = null; pollJob?.cancel(); sleepJob?.cancel(); super.onCleared()
     }
 
