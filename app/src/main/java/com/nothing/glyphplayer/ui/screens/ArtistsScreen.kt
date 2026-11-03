@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -27,6 +28,7 @@ import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URLDecoder
 
@@ -83,8 +85,7 @@ fun isSimilarArtist(a: String, b: String): Boolean {
 data class ArtistGroup(
     val name: String, 
     val tracks: List<Track>, 
-    val isPrimary: Boolean,
-    val posterUri: String?
+    val isPrimary: Boolean
 )
 
 fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
@@ -132,14 +133,17 @@ fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
         val isPrimary = list.any { it.second }
-        val posterUri = uniqueTracks.firstOrNull { !it.artUri.isNullOrBlank() }?.artUri
-        ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
+        ArtistGroup(canonicalName, uniqueTracks, isPrimary)
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
+fun ArtistsScreen(
+    vm: PlayerViewModel = viewModel(), 
+    artistPosters: Map<String, String>,
+    onTrackClick: () -> Unit
+) {
     val lib by vm.library.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var grouped by remember { mutableStateOf<Map<String, ArtistGroup>>(emptyMap()) }
@@ -147,6 +151,8 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(lib) {
         if (lib.isNotEmpty()) {
@@ -173,7 +179,14 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     if (selectedArtist != null) {
         val group = grouped[selectedArtist]
         if (group != null) {
-            ArtistTracksScreen(artistName = group.name, tracks = group.tracks, onBack = { selectedArtist = null }, vm = vm, onTrackClick = onTrackClick)
+            ArtistTracksScreen(
+                artistName = group.name, 
+                tracks = group.tracks, 
+                artistPosters = artistPosters,
+                onBack = { selectedArtist = null }, 
+                vm = vm, 
+                onTrackClick = onTrackClick
+            )
         } else {
             selectedArtist = null
         }
@@ -184,8 +197,11 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         isRefreshing = isRefreshing,
         onRefresh = {
             isRefreshing = true
-            searchQuery = "" // СБРОС ПОИСКА ПРИ ОБНОВЛЕНИИ
-            vm.scanLibrary { isRefreshing = false }
+            searchQuery = ""
+            vm.scanLibrary { 
+                isRefreshing = false 
+                scope.launch { listState.animateScrollToItem(0) }
+            }
         },
         state = pullToRefreshState,
         modifier = Modifier.fillMaxSize()
@@ -213,10 +229,12 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                     CircularProgressIndicator(color = Red)
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     items(displayedArtists, key = { it }) { artistName ->
                         val group = grouped[artistName]
                         val trackCount = group?.tracks?.size ?: 0
+                        val posterUri = artistPosters[artistName] // Берем постер из карты
+                        
                         Row(
                             Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -228,9 +246,9 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                                     .background(Color(0xFF222222)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (group?.posterUri != null) {
+                                if (posterUri != null) {
                                     AsyncImage(
-                                        model = group.posterUri,
+                                        model = posterUri,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
@@ -257,7 +275,14 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
 }
 
 @Composable
-fun ArtistTracksScreen(artistName: String, tracks: List<Track>, onBack: () -> Unit, vm: PlayerViewModel, onTrackClick: () -> Unit) {
+fun ArtistTracksScreen(
+    artistName: String, 
+    tracks: List<Track>, 
+    artistPosters: Map<String, String>,
+    onBack: () -> Unit, 
+    vm: PlayerViewModel, 
+    onTrackClick: () -> Unit
+) {
     var dragOffsetX by remember { mutableStateOf(0f) }
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
         detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
@@ -268,7 +293,24 @@ fun ArtistTracksScreen(artistName: String, tracks: List<Track>, onBack: () -> Un
             Spacer(Modifier.height(16.dp))
             LazyColumn(Modifier.fillMaxSize()) {
                 items(tracks, key = { it.id }) { track ->
-                    Row(Modifier.fillMaxWidth().clickable { vm.playTracks(tracks, tracks.indexOf(track), artistName); onTrackClick() }.padding(vertical = 12.dp)) {
+                    val trackPoster = track.artUri ?: artistPosters[artistName]
+                    Row(Modifier.fillMaxWidth().clickable { vm.playTracks(tracks, tracks.indexOf(track), artistName); onTrackClick() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF222222)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (trackPoster != null) {
+                                AsyncImage(
+                                    model = trackPoster,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(track.title.take(1).uppercase(), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     }
                     HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
