@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
+import com.nothing.glyphplayer.ui.getMainArtist
 import com.nothing.glyphplayer.ui.theme.Red
 import com.nothing.glyphplayer.ui.theme.Surface
 import kotlinx.coroutines.delay
@@ -244,7 +245,6 @@ fun LibraryScreen(
         }
     }
 
-    // ДИАЛОГИ (без изменений)
     if (showAddToPlaylist) {
         if (showCreateFromAdd) {
             PlaylistEditorDialog(
@@ -310,4 +310,106 @@ fun LibraryScreen(
     }
 }
 
-// PlaylistEditorDialog и DeletionTimerSnackbar остались без изменений, они есть в файле.
+@Composable
+fun PlaylistEditorDialog(
+    initialName: String = "",
+    initialDesc: String = "",
+    initialPoster: String? = null,
+    onSave: (String, String?, String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var name by remember { mutableStateOf(initialName) }
+    var desc by remember { mutableStateOf(initialDesc) }
+    var poster by remember { mutableStateOf(initialPoster) }
+    
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) { }
+            poster = uri.toString()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initialName.isEmpty()) "Новый плейлист" else "Редактировать", color = Color.White) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Название") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = desc, onValueChange = { desc = it },
+                    label = { Text("Описание") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { imagePicker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                    Text(if (poster == null) "Выбрать постер" else "Постер выбран", color = Color.White)
+                }
+            }
+        },
+        confirmButton = { 
+            TextButton(onClick = { if (name.isNotBlank()) onSave(name, desc.ifBlank { null }, poster) }) { Text("СОХРАНИТЬ", color = Red) } 
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("ОТМЕНА", color = Color.Gray) } },
+        containerColor = Color(0xFF121212)
+    )
+}
+
+@Composable
+fun DeletionTimerSnackbar(track: Track, onDelete: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+    var timeLeft by remember { mutableStateOf(6) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val animatedOffset by animateFloatAsState(targetValue = dragOffsetY, label = "offset")
+
+    LaunchedEffect(track.id) {
+        while (timeLeft > 0) {
+            delay(1000)
+            timeLeft--
+        }
+        if (timeLeft == 0) onDelete()
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth(0.9f)
+            .offset { IntOffset(0, animatedOffset.roundToInt()) }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        if (dragOffsetY > 100f) onDelete()
+                        else dragOffsetY = 0f
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragOffsetY += dragAmount
+                    }
+                )
+            },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Удаление: ${track.title}", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$timeLeft сек", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.width(16.dp))
+                TextButton(onClick = onCancel) { Text("ОТМЕНИТЬ", color = Red, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+    }
+}
