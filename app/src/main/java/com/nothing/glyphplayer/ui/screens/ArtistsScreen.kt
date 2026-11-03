@@ -1,7 +1,9 @@
 package com.nothing.glyphplayer.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +12,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -20,10 +23,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
@@ -85,7 +91,8 @@ fun isSimilarArtist(a: String, b: String): Boolean {
 data class ArtistGroup(
     val name: String, 
     val tracks: List<Track>, 
-    val isPrimary: Boolean
+    val isPrimary: Boolean,
+    val posterUri: String?
 )
 
 fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
@@ -133,7 +140,8 @@ fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
         val isPrimary = list.any { it.second }
-        ArtistGroup(canonicalName, uniqueTracks, isPrimary)
+        val posterUri = uniqueTracks.firstOrNull { !it.artUri.isNullOrBlank() }?.artUri
+        ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
     }
 }
 
@@ -141,7 +149,7 @@ fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
 @Composable
 fun ArtistsScreen(
     vm: PlayerViewModel = viewModel(), 
-    artistPosters: Map<String, String>,
+    trackPosters: Map<Long, String>,
     onTrackClick: () -> Unit
 ) {
     val lib by vm.library.collectAsState()
@@ -182,7 +190,7 @@ fun ArtistsScreen(
             ArtistTracksScreen(
                 artistName = group.name, 
                 tracks = group.tracks, 
-                artistPosters = artistPosters,
+                trackPosters = trackPosters,
                 onBack = { selectedArtist = null }, 
                 vm = vm, 
                 onTrackClick = onTrackClick
@@ -233,7 +241,7 @@ fun ArtistsScreen(
                     items(displayedArtists, key = { it }) { artistName ->
                         val group = grouped[artistName]
                         val trackCount = group?.tracks?.size ?: 0
-                        val posterUri = artistPosters[artistName]
+                        val posterUri = group?.posterUri
                         
                         Row(
                             Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
@@ -274,48 +282,211 @@ fun ArtistsScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ArtistTracksScreen(
     artistName: String, 
     tracks: List<Track>, 
-    artistPosters: Map<String, String>,
+    trackPosters: Map<Long, String>,
     onBack: () -> Unit, 
     vm: PlayerViewModel, 
     onTrackClick: () -> Unit
 ) {
     var dragOffsetX by remember { mutableStateOf(0f) }
+    
+    // Состояния для меню и диалогов
+    var showMenuForTrack by remember { mutableStateOf<Track?>(null) }
+    var trackToDelete by remember { mutableStateOf<Track?>(null) }
+    var trackToRename by remember { mutableStateOf<Track?>(null) }
+    var pendingDeleteTrack by remember { mutableStateOf<Track?>(null) }
+    var showAddToPlaylist by remember { mutableStateOf(false) }
+    var showCreateFromAdd by remember { mutableStateOf(false) }
+    
+    // Состояния для мультивыбора
+    var selectedTracks by remember { mutableStateOf(listOf<Long>()) }
+    var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
+    
+    val playlists by vm.playlists.collectAsState()
+    
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
         detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
     }) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } }
-            Text(artistName, style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Spacer(Modifier.height(16.dp))
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(tracks, key = { it.id }) { track ->
-                    val trackPoster = track.artUri ?: artistPosters[artistName]
-                    Row(Modifier.fillMaxWidth().clickable { vm.playTracks(tracks, tracks.indexOf(track), artistName); onTrackClick() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF222222)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (trackPoster != null) {
-                                AsyncImage(
-                                    model = trackPoster,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(track.title.take(1).uppercase(), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().padding(16.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { 
+                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } 
+                }
+                Text(artistName, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                Spacer(Modifier.height(16.dp))
+                
+                if (selectedTracks.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${selectedTracks.size}", color = Color.White, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { 
+                                vm.playNext(selectedTracks.mapNotNull { id -> tracks.find { it.id == id } }); 
+                                selectedTracks = emptyList() 
+                            }, contentPadding = PaddingValues(4.dp)) { 
+                                Text("Следующими", color = Red, style = MaterialTheme.typography.labelSmall) 
+                            }
+                            TextButton(onClick = { 
+                                vm.addToQueue(selectedTracks.mapNotNull { id -> tracks.find { it.id == id } }); 
+                                selectedTracks = emptyList() 
+                            }, contentPadding = PaddingValues(4.dp)) { 
+                                Text("В очередь", color = Red, style = MaterialTheme.typography.labelSmall) 
+                            }
+                            TextButton(onClick = { showAddToPlaylist = true }, contentPadding = PaddingValues(4.dp)) { 
+                                Text("В плейлист", color = Red, style = MaterialTheme.typography.labelSmall) 
+                            }
+                            IconButton(onClick = { selectedTracks = emptyList() }) { 
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray) 
                             }
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                }
+                
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(tracks, key = { it.id }) { track ->
+                        val isSelected = selectedTracks.contains(track.id)
+                        
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
+                                .combinedClickable(
+                                    onClick = {
+                                        if (selectedTracks.isEmpty()) { 
+                                            vm.playTracks(tracks, tracks.indexOf(track), artistName)
+                                            onTrackClick() 
+                                        } else { 
+                                            selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
+                                        }
+                                    },
+                                    onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
+                                )
+                                .padding(vertical = 8.dp), 
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF222222)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val poster = trackPosters[track.id]
+                                if (poster != null) {
+                                    AsyncImage(
+                                        model = poster,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(track.title.take(1).uppercase(), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            
+                            if (isSelected) {
+                                Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(end = 12.dp))
+                            } else {
+                                Box {
+                                    TextButton(onClick = { showMenuForTrack = track }) { Text("⋮", color = Color.Gray, style = MaterialTheme.typography.titleLarge) }
+                                    DropdownMenu(expanded = showMenuForTrack?.id == track.id, onDismissRequest = { showMenuForTrack = null }, containerColor = Color(0xFF1E1E1E)) {
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = { vm.playNext(listOf(track)); showMenuForTrack = null })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
+                                            trackForPlaylist = track
+                                            showMenuForTrack = null
+                                            showAddToPlaylist = true 
+                                        })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = { trackToRename = track; showMenuForTrack = null })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = { trackToDelete = track; showMenuForTrack = null })
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                    }
                 }
             }
+            
+            if (pendingDeleteTrack != null) {
+                DeletionTimerSnackbar(
+                    track = pendingDeleteTrack!!,
+                    onDelete = { vm.deleteTrack(pendingDeleteTrack!!); pendingDeleteTrack = null },
+                    onCancel = { pendingDeleteTrack = null },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                )
+            }
         }
+    }
+    
+    if (showAddToPlaylist) {
+        if (showCreateFromAdd) {
+            PlaylistEditorDialog(
+                initialName = "",
+                onSave = { name, desc, poster ->
+                    val tracksToAdd = if (selectedTracks.isNotEmpty()) selectedTracks.toList() else listOfNotNull(trackForPlaylist?.id)
+                    vm.createPlaylist(name, desc, poster) { newId ->
+                        vm.addMultipleToPlaylist(newId, tracksToAdd)
+                    }
+                    showAddToPlaylist = false
+                    showCreateFromAdd = false
+                    selectedTracks = emptyList()
+                    trackForPlaylist = null
+                },
+                onDismiss = { showCreateFromAdd = false }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showAddToPlaylist = false; trackForPlaylist = null },
+                title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
+                text = {
+                    Column {
+                        playlists.forEach { p ->
+                            TextButton(onClick = { 
+                                val tracksToAdd = if (selectedTracks.isNotEmpty()) selectedTracks else listOfNotNull(trackForPlaylist?.id)
+                                vm.addMultipleToPlaylist(p.id, tracksToAdd)
+                                showAddToPlaylist = false
+                                selectedTracks = emptyList()
+                                trackForPlaylist = null
+                            }) { Text(p.name, color = Color.White) }
+                        }
+                        TextButton(onClick = { showCreateFromAdd = true }) { Text("+ Создать новый", color = Red) }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = { showAddToPlaylist = false; showCreateFromAdd = false; trackForPlaylist = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } },
+                containerColor = Color(0xFF121212)
+            )
+        }
+    }
+    
+    if (trackToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { trackToDelete = null }, title = { Text(stringResource(R.string.dialog_delete_title), color = Color.White) },
+            text = { Text(stringResource(R.string.dialog_delete_message), color = Color.Gray) },
+            confirmButton = { TextButton(onClick = { pendingDeleteTrack = trackToDelete; trackToDelete = null }) { Text(stringResource(R.string.action_delete), color = Red) } },
+            dismissButton = { TextButton(onClick = { trackToDelete = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+        )
+    }
+    
+    if (trackToRename != null) {
+        var newTitle by remember { mutableStateOf(trackToRename!!.title) }
+        AlertDialog(
+            onDismissRequest = { trackToRename = null }, title = { Text(stringResource(R.string.dialog_rename_title), color = Color.White) },
+            text = { OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) },
+            confirmButton = { 
+                TextButton(onClick = { 
+                    if (newTitle.isNotBlank()) {
+                        vm.renameTrack(trackToRename!!, newTitle)
+                        trackToRename = null
+                    }
+                }) { Text(stringResource(R.string.action_save), color = Red) } 
+            },
+            dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
+        )
     }
 }
