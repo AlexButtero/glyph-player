@@ -27,11 +27,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URLDecoder
 import kotlin.math.abs
 
 data class PlaybackState(
@@ -50,6 +52,19 @@ data class PlaybackState(
     val playlistName: String? = "Мои треки"
 )
 
+// Утилита для получения "чистого" имени главного исполнителя
+private fun getMainArtist(rawArtist: String?): String {
+    if (rawArtist.isNullOrBlank() || rawArtist.equals("<unknown>", true)) return "Unknown"
+    var clean = rawArtist
+    try { clean = URLDecoder.decode(clean, "UTF-8") } catch (_: Exception) {}
+    clean = clean.replace(Regex("\\[.*?\\]"), "")
+        .replace(Regex("(?i)\\(.*?feat.*?\\)"), "")
+        .trim()
+    val split = clean.replace(Regex("(?i)\\s*(feat\\.?|ft\\.?|&|,|vs\\.?|x)\\s*"), "|")
+        .split("|").firstOrNull()?.trim()
+    return split?.replaceFirstChar { it.uppercase() } ?: clean
+}
+
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as GlyphPlayerApp).repository
     private val context = app.applicationContext
@@ -60,6 +75,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
     val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
+
+    // КАРТА ПОСТЕРОВ: Главный исполнитель -> URI картинки
+    val artistPosters: StateFlow<Map<String, String>> = library.map { lib ->
+        val map = mutableMapOf<String, String>()
+        lib.forEach { track ->
+            if (!track.artUri.isNullOrBlank()) {
+                val mainArtist = getMainArtist(track.artist)
+                if (!map.containsKey(mainArtist)) {
+                    map[mainArtist] = track.artUri
+                }
+            }
+        }
+        map
+    }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
@@ -103,12 +132,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 val newController = future.get()
                 controller = newController
                 
-                // Исправлено: используем только Player.Listener (MediaController.Listener не существует)
                 newController.addListener(object : Player.Listener {
                     override fun onEvents(player: Player, events: Player.Events) = refresh()
                 })
                 
-                // Загружаем очередь в фоновом потоке
                 val c = newController
                 scope.launch(Dispatchers.IO) {
                     try {
