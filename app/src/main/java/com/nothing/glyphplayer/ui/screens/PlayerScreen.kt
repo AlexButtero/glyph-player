@@ -416,7 +416,7 @@ fun PlayerScreen(
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (С ФИКСАЦИЕЙ ПЕРЕНОСОВ И СМЕНОЙ ЦВЕТА)
+// ЭКРАН КАРАОКЕ (ФИКСИРОВАННЫЙ МАКЕТ БЕЗ ПРЫЖКОВ ПЕРЕНОСА)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(
@@ -533,20 +533,21 @@ fun KaraokeLyricsScreen(
                     itemsIndexed(displayLyrics) { index, line ->
                         val isActive = index == activeIndex
                         
-                        val animatedWeight by animateIntAsState(
-                            targetValue = if (isActive) 800 else 400,
+                        // Анимируем масштаб (от 1f к 0.75f) и прозрачность, а размер шрифта остается строго 22sp
+                        val animatedScale by animateFloatAsState(
+                            targetValue = if (isActive) 1f else 0.75f,
                             animationSpec = tween(300),
-                            label = "weight"
+                            label = "scale"
                         )
                         val animatedAlpha by animateFloatAsState(
                             targetValue = if (isActive) 1f else 0.5f,
                             animationSpec = tween(300),
                             label = "alpha"
                         )
-                        val animatedFontSize by animateFloatAsState(
-                            targetValue = if (isActive) 20f else 16f,
+                        val animatedColor by animateColorAsState(
+                            targetValue = if (isActive) activeColor else Color.Gray,
                             animationSpec = tween(300),
-                            label = "fontSize"
+                            label = "color"
                         )
 
                         Box(
@@ -555,24 +556,19 @@ fun KaraokeLyricsScreen(
                                 .padding(vertical = 12.dp, horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Невидимая подложка: всегда 22sp и ExtraBold, чтобы контейнер СРАЗУ знал правильный перенос
                             Text(
                                 text = line.text,
-                                color = Color.Transparent,
+                                color = animatedColor,
+                                // Жёстко фиксируем размер и жирность, чтобы макет СРАЗУ рассчитал переносы для максимального размера
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 22.sp, // Немного больше видимого, чтобы точно влезло
-                                lineHeight = 28.sp, // Фиксируем высоту строки
-                                textAlign = TextAlign.Center
-                            )
-                            
-                            Text(
-                                text = line.text,
-                                color = if (isActive) activeColor else Color.Gray,
-                                fontWeight = FontWeight(animatedWeight),
-                                fontSize = animatedFontSize.sp,
-                                lineHeight = 28.sp, // Такая же высота строки
+                                fontSize = 22.sp,
+                                lineHeight = 28.sp,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier
+                                    .graphicsLayer {
+                                        scaleX = animatedScale
+                                        scaleY = animatedScale
+                                    }
                                     .alpha(animatedAlpha)
                                     .pointerInput(Unit) {
                                         detectTapGestures(
@@ -634,7 +630,6 @@ fun KaraokeLyricsScreen(
             ) {
                 Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     
-                    // ТОГГЛ ЦВЕТА ТЕКСТА
                     Row(
                         Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
