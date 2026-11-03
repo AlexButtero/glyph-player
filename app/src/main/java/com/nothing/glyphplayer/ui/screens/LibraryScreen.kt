@@ -96,6 +96,7 @@ fun LibraryScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                 isRefreshing = true
                 sortMode = 3
                 isShuffled = false
+                search = "" // СБРОС ПОИСКА ПРИ ОБНОВЛЕНИИ
                 vm.scanLibrary { isRefreshing = false }
             },
             state = pullToRefreshState,
@@ -307,7 +308,6 @@ fun PlaylistEditorDialog(
     var desc by remember { mutableStateOf(initialDesc) }
     var poster by remember { mutableStateOf(initialPoster) }
     
-    // ИСПРАВЛЕНО: Используем OpenDocument для сохранения постоянных разрешений
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
