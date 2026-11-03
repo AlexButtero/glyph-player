@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -130,18 +132,21 @@ fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
         val isPrimary = list.any { it.second }
-        // Ищем первый трек с постером
         val posterUri = uniqueTracks.firstOrNull { !it.artUri.isNullOrBlank() }?.artUri
         ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
     val lib by vm.library.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var grouped by remember { mutableStateOf<Map<String, ArtistGroup>>(emptyMap()) }
     var isCalculating by remember { mutableStateOf(false) }
+    
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
 
     LaunchedEffect(lib) {
         if (lib.isNotEmpty()) {
@@ -175,66 +180,76 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         return
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-        Spacer(Modifier.height(16.dp))
-        
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Red,
-                unfocusedBorderColor = Color.DarkGray,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            ),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-        )
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            searchQuery = "" // СБРОС ПОИСКА ПРИ ОБНОВЛЕНИИ
+            vm.scanLibrary { isRefreshing = false }
+        },
+        state = pullToRefreshState,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+            Spacer(Modifier.height(16.dp))
+            
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Red,
+                    unfocusedBorderColor = Color.DarkGray,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            )
 
-        if (isCalculating) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Red)
-            }
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(displayedArtists, key = { it }) { artistName ->
-                    val group = grouped[artistName]
-                    val trackCount = group?.tracks?.size ?: 0
-                    Row(
-                        Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Круглый постер или буква
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(Color(0xFF222222)),
-                            contentAlignment = Alignment.Center
+            if (isCalculating) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Red)
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(displayedArtists, key = { it }) { artistName ->
+                        val group = grouped[artistName]
+                        val trackCount = group?.tracks?.size ?: 0
+                        Row(
+                            Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (group?.posterUri != null) {
-                                AsyncImage(
-                                    model = group.posterUri,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = artistName.take(1).uppercase(),
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(Color(0xFF222222)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (group?.posterUri != null) {
+                                    AsyncImage(
+                                        model = group.posterUri,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = artistName.take(1).uppercase(),
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
+                            Spacer(Modifier.width(12.dp))
+                            Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                     }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                 }
             }
         }
