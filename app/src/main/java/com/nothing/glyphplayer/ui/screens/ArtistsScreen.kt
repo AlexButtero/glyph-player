@@ -1,20 +1,26 @@
 package com.nothing.glyphplayer.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
@@ -41,7 +47,7 @@ fun splitArtistsWithPrimary(rawArtist: String?): List<Pair<String, Boolean>> {
     return processed.split("|")
         .map { cleanArtistName(it) }
         .filter { it.isNotBlank() && it.length > 1 && !it.equals("<unknown>", true) }
-        .mapIndexed { index, name -> name to (index == 0) } // Первый - true (главный), остальные false (feat)
+        .mapIndexed { index, name -> name to (index == 0) }
 }
 
 fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
@@ -72,7 +78,12 @@ fun isSimilarArtist(a: String, b: String): Boolean {
     return prefixLen >= 3 && normA.take(prefixLen) == normB.take(prefixLen)
 }
 
-data class ArtistGroup(val name: String, val tracks: List<Track>, val isPrimary: Boolean)
+data class ArtistGroup(
+    val name: String, 
+    val tracks: List<Track>, 
+    val isPrimary: Boolean,
+    val posterUri: String?
+)
 
 fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
     val allArtists = mutableSetOf<String>()
@@ -118,8 +129,10 @@ fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
 
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
-        val isPrimary = list.any { it.second } // Если он был хотя бы раз главным, он главный
-        ArtistGroup(canonicalName, uniqueTracks, isPrimary)
+        val isPrimary = list.any { it.second }
+        // Ищем первый трек с постером
+        val posterUri = uniqueTracks.firstOrNull { !it.artUri.isNullOrBlank() }?.artUri
+        ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
     }
 }
 
@@ -140,17 +153,13 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
         }
     }
 
-    // Фильтрация и сортировка
     val displayedArtists = remember(grouped, searchQuery) {
         val query = searchQuery.trim().lowercase()
         val filtered = if (query.isEmpty()) {
-            // Показываем только главных исполнителей
             grouped.values.filter { it.isPrimary }
         } else {
-            // Если введен поиск, показываем всех (включая feat.)
             grouped.values.filter { it.name.lowercase().contains(query) }
         }
-        // Сортируем по количеству треков (от большего к меньшему)
         filtered.sortedByDescending { it.tracks.size }.map { it.name }
     }
 
@@ -194,10 +203,35 @@ fun ArtistsScreen(vm: PlayerViewModel = viewModel(), onTrackClick: () -> Unit) {
                     val group = grouped[artistName]
                     val trackCount = group?.tracks?.size ?: 0
                     Row(
-                        Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        // Круглый постер или буква
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(Color(0xFF222222)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (group?.posterUri != null) {
+                                AsyncImage(
+                                    model = group.posterUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = artistName.take(1).uppercase(),
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                     }
                     HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
