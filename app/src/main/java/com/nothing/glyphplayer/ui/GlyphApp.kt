@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -32,6 +33,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun GlyphApp() {
+    // ВАЖНО: Единый ViewModel для всего приложения (уровень Activity)
+    val vm: PlayerViewModel = viewModel()
+    
     val nav = rememberNavController()
     val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
@@ -47,7 +51,7 @@ fun GlyphApp() {
         containerColor = Color.Black,
         bottomBar = {
             Column {
-                MiniPlayer(onClick = { nav.navigate("PLAYER") { launchSingleTop = true } })
+                MiniPlayer(vm = vm, onClick = { nav.navigate("PLAYER") { launchSingleTop = true } })
                 NavigationBar(containerColor = Color.Black) {
                     tabs.forEachIndexed { i, label ->
                         NavigationBarItem(
@@ -64,20 +68,19 @@ fun GlyphApp() {
         Box(Modifier.fillMaxSize().padding(pad)) {
             NavHost(nav, startDestination = "MAIN") {
                 composable("MAIN") {
-                    // ОПТИМИЗАЦИЯ: подгрузка соседних экранов
                     HorizontalPager(
                         state = pagerState,
                         beyondViewportPageCount = 1 
                     ) { page ->
                         when (page) {
-                            0 -> LibraryScreen(onTrackClick = { nav.navigate("PLAYER") })
-                            1 -> ArtistsScreen(onTrackClick = { nav.navigate("PLAYER") })
-                            2 -> PlaylistsScreen(onPlaylistClick = { nav.navigate("PLAYER") })
-                            3 -> SettingsScreen()
+                            0 -> LibraryScreen(vm = vm, onTrackClick = { nav.navigate("PLAYER") })
+                            1 -> ArtistsScreen(vm = vm, onTrackClick = { nav.navigate("PLAYER") })
+                            2 -> PlaylistsScreen(vm = vm, onPlaylistClick = { nav.navigate("PLAYER") })
+                            3 -> SettingsScreen(vm = vm)
                         }
                     }
                 }
-                composable("PLAYER") { PlayerScreen(onBack = { nav.popBackStack() }) }
+                composable("PLAYER") { PlayerScreen(vm = vm, onBack = { nav.popBackStack() }) }
             }
         }
     }
