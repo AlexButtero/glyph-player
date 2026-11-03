@@ -104,6 +104,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 controller?.addListener(object : Player.Listener {
                     override fun onEvents(player: Player, events: Player.Events) = refresh()
                 })
+                
+                // Загружаем очередь один раз при подключении (если приложение перезапустилось)
+                val c = controller
+                if (c != null && c.mediaItemCount > 0) {
+                    val initialQueue = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
+                    if (initialQueue.isNotEmpty()) {
+                        originalQueue = initialQueue
+                        _state.update { it.copy(queue = initialQueue, currentIndex = c.currentMediaItemIndex) }
+                    }
+                }
+                
                 refresh()
                 startPolling()
             } catch (_: Exception) { }
@@ -114,8 +125,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         try {
             val item = c.currentMediaItem
-            val q = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it) }
             
+            // ОПТИМИЗАЦИЯ: Убрано получение всей очереди (getMediaItemAt) из refresh()
             _state.update { current ->
                 current.copy(
                     isPlaying = c.isPlaying,
@@ -126,7 +137,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     durationMs = c.duration.coerceAtLeast(0),
                     repeatMode = c.repeatMode,
                     speed = c.playbackParameters.speed,
-                    queue = q,
                     currentIndex = c.currentMediaItemIndex
                 )
             }
@@ -186,7 +196,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             if (items.isEmpty()) return
             
             originalQueue = items
-            _state.update { it.copy(shuffle = false, playlistName = playlistName) }
+            // Сохраняем очередь в стейт
+            _state.update { it.copy(shuffle = false, playlistName = playlistName, queue = items) }
             
             c.shuffleModeEnabled = false
             c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
@@ -218,7 +229,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val currentPos = c.currentPosition
             val wasPlaying = c.isPlaying
 
-            val currentQueue = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }.toMutableList()
+            val currentQueue = _state.value.queue.toMutableList()
             if (currentQueue.isEmpty()) return
 
             if (newShuffle) {
@@ -293,6 +304,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val items = tracks.map { it.toMediaItem() }
             c.addMediaItems(items)
             originalQueue = originalQueue + items
+            _state.update { it.copy(queue = it.queue + items) }
         } catch (_: Exception) { }
     }
     
@@ -315,6 +327,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 mutableOriginal.addAll(items)
             }
             originalQueue = mutableOriginal
+            
+            val newQueue = _state.value.queue.toMutableList()
+            newQueue.addAll(insertIndex.coerceAtMost(newQueue.size), items)
+            _state.update { it.copy(queue = newQueue) }
         } catch (_: Exception) { }
     }
     
