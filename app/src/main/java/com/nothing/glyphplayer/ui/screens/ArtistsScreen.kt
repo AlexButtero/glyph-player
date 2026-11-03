@@ -141,6 +141,7 @@ fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
         val isPrimary = list.any { it.second }
+        // Ищем первый попавшийся валидный постер среди треков артиста
         val posterUri = uniqueTracks.firstNotNullOfOrNull { trackPosters[it.id] }
         ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
     }
@@ -183,7 +184,7 @@ fun ArtistsScreen(
         filtered.sortedByDescending { it.tracks.size }.map { it.name }
     }
 
-    // Используем rememberSaveable, чтобы сохранять состояние при переходе в плеер и обратно
+    // Используем rememberSaveable для сохранения стейта при переходе в плеер
     var selectedArtist by rememberSaveable { mutableStateOf<String?>(null) }
 
     if (selectedArtist != null) {
@@ -197,6 +198,11 @@ fun ArtistsScreen(
                 vm = vm, 
                 onTrackClick = onTrackClick
             )
+        } else if (isCalculating) {
+            // Если список еще генерируется, показываем загрузку, а не выкидываем обратно
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Red)
+            }
         } else {
             selectedArtist = null
         }
@@ -296,7 +302,6 @@ fun ArtistTracksScreen(
 ) {
     var dragOffsetX by remember { mutableStateOf(0f) }
     
-    // Состояния для меню и диалогов
     var showMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var trackToDelete by remember { mutableStateOf<Track?>(null) }
     var trackToRename by remember { mutableStateOf<Track?>(null) }
@@ -304,7 +309,6 @@ fun ArtistTracksScreen(
     var showAddToPlaylist by remember { mutableStateOf(false) }
     var showCreateFromAdd by remember { mutableStateOf(false) }
     
-    // Состояния для мультивыбора
     var selectedTracks by remember { mutableStateOf(listOf<Long>()) }
     var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
     
