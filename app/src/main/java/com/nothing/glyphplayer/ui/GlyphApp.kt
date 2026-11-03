@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun GlyphApp() {
     val vm: PlayerViewModel = viewModel()
-    val artistPosters by vm.artistPosters.collectAsState()
+    val trackPosters by vm.trackPosters.collectAsState()
     
     val nav = rememberNavController()
     val pagerState = rememberPagerState(pageCount = { 4 })
@@ -74,14 +74,14 @@ fun GlyphApp() {
                         beyondViewportPageCount = 1 
                     ) { page ->
                         when (page) {
-                            0 -> LibraryScreen(vm = vm, artistPosters = artistPosters, onTrackClick = { nav.navigate("PLAYER") })
-                            1 -> ArtistsScreen(vm = vm, artistPosters = artistPosters, onTrackClick = { nav.navigate("PLAYER") })
-                            2 -> PlaylistsScreen(vm = vm, artistPosters = artistPosters, onPlaylistClick = { nav.navigate("PLAYER") })
+                            0 -> LibraryScreen(vm = vm, trackPosters = trackPosters, onTrackClick = { nav.navigate("PLAYER") })
+                            1 -> ArtistsScreen(vm = vm, trackPosters = trackPosters, onTrackClick = { nav.navigate("PLAYER") })
+                            2 -> PlaylistsScreen(vm = vm, trackPosters = trackPosters, onPlaylistClick = { nav.navigate("PLAYER") })
                             3 -> SettingsScreen(vm = vm)
                         }
                     }
                 }
-                composable("PLAYER") { PlayerScreen(vm = vm, artistPosters = artistPosters, onBack = { nav.popBackStack() }) }
+                composable("PLAYER") { PlayerScreen(vm = vm, trackPosters = trackPosters, onBack = { nav.popBackStack() }) }
             }
         }
     }
