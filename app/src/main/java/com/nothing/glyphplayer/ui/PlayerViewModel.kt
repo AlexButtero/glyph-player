@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -52,17 +53,26 @@ data class PlaybackState(
     val playlistName: String? = "Мои треки"
 )
 
-// Утилита для получения "чистого" имени главного исполнителя
-fun getMainArtist(rawArtist: String?): String {
-    if (rawArtist.isNullOrBlank() || rawArtist.equals("<unknown>", true)) return "Unknown"
+// Утилита: получаем "главного" исполнителя для ключа.
+// Если поле artist пустое/<unknown>, пытаемся вытащить из названия ("Artist - Title").
+fun resolveArtistKey(title: String?, artist: String?): String {
+    val rawArtist = if (artist.isNullOrBlank() || artist.equals("<unknown>", true)) {
+        if (!title.isNullOrBlank() && title.contains(" - ")) {
+            title.split(" - ", limit = 2)[0]
+        } else {
+            "Unknown"
+        }
+    } else artist
+
     var clean = rawArtist
     try { clean = URLDecoder.decode(clean, "UTF-8") } catch (_: Exception) {}
     clean = clean.replace(Regex("\\[.*?\\]"), "")
         .replace(Regex("(?i)\\(.*?feat.*?\\)"), "")
         .trim()
-    val split = clean.replace(Regex("(?i)\\s*(feat\\.?|ft\\.?|&|,|vs\\.?|x)\\s*"), "|")
-        .split("|").firstOrNull()?.trim()
-    return split?.replaceFirstChar { it.uppercase() } ?: clean
+
+    val parts = clean.replace(Regex("(?i)\\s*(feat\\.?|ft\\.?|&|,|vs\\.?|x)\\s*"), "|").split("|")
+    val main = parts.firstOrNull()?.trim() ?: ""
+    return if (main.isNotBlank()) main.replaceFirstChar { it.uppercase() } else "Unknown"
 }
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -76,19 +86,34 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
     val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
 
-    // КАРТА ПОСТЕРОВ: Главный исполнитель -> URI картинки
-    val artistPosters: StateFlow<Map<String, String>> = library.map { lib ->
-        val map = mutableMapOf<String, String>()
-        lib.forEach { track ->
-            if (!track.artUri.isNullOrBlank()) {
-                val mainArtist = getMainArtist(track.artist)
-                if (!map.containsKey(mainArtist)) {
-                    map[mainArtist] = track.artUri
+    // КАРТА ПОСТЕРОВ: TrackId -> URI постера (собственного или исполнителя)
+    val trackPosters: StateFlow<Map<Long, String>> = library
+        .map { lib ->
+            val artistToPoster = mutableMapOf<String, String>()
+            // 1) Собираем постер для каждого артиста (первый найденный)
+            lib.forEach { track ->
+                if (!track.artUri.isNullOrBlank()) {
+                    val key = resolveArtistKey(track.title, track.artist)
+                    if (!artistToPoster.containsKey(key)) {
+                        artistToPoster[key] = track.artUri
+                    }
                 }
             }
+            // 2) Присваиваем постер каждому треку
+            val result = mutableMapOf<Long, String>()
+            lib.forEach { track ->
+                val own = track.artUri
+                if (!own.isNullOrBlank()) {
+                    result[track.id] = own
+                } else {
+                    val key = resolveArtistKey(track.title, track.artist)
+                    artistToPoster[key]?.let { result[track.id] = it }
+                }
+            }
+            result
         }
-        map
-    }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
+        .flowOn(Dispatchers.Default)
+        .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
@@ -228,7 +253,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
             try {
-                val items = tracks.map { it.toMediaItem() }
+                val posters = trackPosters.value
+                val items = tracks.map { track -> track.toMediaItem(posters[track.id]) }
                 if (items.isEmpty()) return@launch
                 
                 originalQueue = items
@@ -343,7 +369,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
             try {
-                val items = tracks.map { it.toMediaItem() }
+                val posters = trackPosters.value
+                val items = tracks.map { track -> track.toMediaItem(posters[track.id]) }
                 val newQueue = _state.value.queue + items
                 withContext(Dispatchers.Main) {
                     try {
@@ -360,7 +387,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
             try {
-                val items = tracks.map { it.toMediaItem() }
+                val posters = trackPosters.value
+                val items = tracks.map { track -> track.toMediaItem(posters[track.id]) }
                 var insertIndex = 0
                 var currentId: String? = null
                 
@@ -449,7 +477,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         controller?.release(); controller = null; pollJob?.cancel(); sleepJob?.cancel(); super.onCleared()
     }
 
-    private fun Track.toMediaItem(): MediaItem =
-        MediaItem.Builder().setMediaId(id.toString()).setUri(uri)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album).setArtworkUri(artUri?.let { Uri.parse(it) }).build()).build()
+    private fun Track.toMediaItem(fallbackArt: String? = null): MediaItem {
+        val finalArt = artUri ?: fallbackArt
+        return MediaItem.Builder()
+            .setMediaId(id.toString())
+            .setUri(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .setAlbumTitle(album)
+                    .setArtworkUri(finalArt?.let { Uri.parse(it) })
+                    .build()
+            ).build()
+    }
 }
