@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,7 +53,10 @@ fun PlaylistsScreen(
     val playlists by vm.playlists.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
     
-    var openedPlaylist by remember { mutableStateOf<Playlist?>(null) }
+    // Используем rememberSaveable, чтобы сохранять открытый плейлист при переходе в плеер
+    var openedPlaylistId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val openedPlaylist = remember(playlists, openedPlaylistId) { playlists.find { it.id == openedPlaylistId } }
+    
     var playlistTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
 
     var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
@@ -71,36 +75,36 @@ fun PlaylistsScreen(
     // Мультивыбор для треков в плейлисте
     var selectedTracks by remember { mutableStateOf(listOf<Long>()) }
     
-    LaunchedEffect(openedPlaylist) {
-        openedPlaylist?.let { p ->
-            vm.getPlaylistTracks(p.id) { tracks -> playlistTracks = tracks }
+    LaunchedEffect(openedPlaylistId) {
+        openedPlaylistId?.let { pId ->
+            vm.getPlaylistTracks(pId) { tracks -> playlistTracks = tracks }
         }
     }
 
     if (openedPlaylist != null) {
         var dragOffsetX by remember { mutableStateOf(0f) }
         Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-            detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) openedPlaylist = null; dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
+            detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) openedPlaylistId = null; dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
         }) {
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().padding(16.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                        IconButton(onClick = { openedPlaylist = null }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
+                        IconButton(onClick = { openedPlaylistId = null }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
                     }
                     
                     Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(100.dp).clip(RoundedCornerShape(8.dp)).background(Surface), contentAlignment = Alignment.Center) {
-                            if (openedPlaylist!!.posterUri != null) {
-                                AsyncImage(model = openedPlaylist!!.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            if (openedPlaylist.posterUri != null) {
+                                AsyncImage(model = openedPlaylist.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             } else {
                                 Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
                             }
                         }
                         Spacer(Modifier.width(16.dp))
                         Column {
-                            Text(openedPlaylist!!.name, style = MaterialTheme.typography.headlineSmall, color = Color.White)
-                            if (!openedPlaylist!!.description.isNullOrBlank()) {
-                                Text(openedPlaylist!!.description!!, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 3)
+                            Text(openedPlaylist.name, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                            if (!openedPlaylist.description.isNullOrBlank()) {
+                                Text(openedPlaylist.description!!, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 3)
                             }
                             Text("${playlistTracks.size} треков", color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
                         }
@@ -142,7 +146,7 @@ fun PlaylistsScreen(
                                 .combinedClickable(
                                     onClick = {
                                         if (selectedTracks.isEmpty()) { 
-                                            vm.playTracks(playlistTracks, playlistTracks.indexOf(track), openedPlaylist!!.name)
+                                            vm.playTracks(playlistTracks, playlistTracks.indexOf(track), openedPlaylist.name)
                                             onPlaylistClick() 
                                         } else { 
                                             selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
@@ -194,7 +198,7 @@ fun PlaylistsScreen(
                         onDelete = { 
                             vm.deleteTrack(pendingDeleteTrack!!)
                             pendingDeleteTrack = null
-                            openedPlaylist?.let { p -> vm.getPlaylistTracks(p.id) { playlistTracks = it } }
+                            vm.getPlaylistTracks(openedPlaylist.id) { playlistTracks = it }
                         },
                         onCancel = { pendingDeleteTrack = null },
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
@@ -231,7 +235,7 @@ fun PlaylistsScreen(
                                 }
                             }
                         ) {
-                            Row(Modifier.fillMaxWidth().background(Color.Black).clickable { openedPlaylist = p }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().background(Color.Black).clickable { openedPlaylistId = p.id }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface), contentAlignment = Alignment.Center) {
                                     if (p.posterUri != null) AsyncImage(model = p.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                     else Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray)
