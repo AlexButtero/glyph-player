@@ -37,7 +37,6 @@ import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
-import com.nothing.glyphplayer.ui.getMainArtist
 import com.nothing.glyphplayer.ui.theme.Red
 import com.nothing.glyphplayer.ui.theme.Surface
 import kotlinx.coroutines.delay
@@ -48,7 +47,7 @@ import kotlin.math.roundToInt
 @Composable
 fun LibraryScreen(
     vm: PlayerViewModel = viewModel(), 
-    artistPosters: Map<String, String>,
+    trackPosters: Map<Long, String>,
     onTrackClick: () -> Unit
 ) {
     val lib by vm.library.collectAsState()
@@ -174,8 +173,6 @@ fun LibraryScreen(
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                         itemsIndexed(filtered, key = { _, track -> track.id }) { idx, track ->
                             val isSelected = selectedTracks.contains(track.id)
-                            val artistPoster = artistPosters[getMainArtist(track.artist)]
-                            
                             Row(
                                 Modifier.fillMaxWidth().background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
                                     .combinedClickable(
@@ -195,7 +192,7 @@ fun LibraryScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AsyncImage(
-                                        model = track.artUri ?: artistPoster,
+                                        model = trackPosters[track.id],
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize(),
