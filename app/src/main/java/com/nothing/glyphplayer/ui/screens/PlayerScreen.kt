@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -40,6 +41,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,7 +113,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // РАЗМЫТЫЙ ФОН (без изменений)
+        // РАЗМЫТЫЙ ФОН
         AsyncImage(
             model = state.artUri,
             contentDescription = null,
@@ -141,36 +143,38 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ВЕРХНЯЯ ПАНЕЛЬ (VK STYLE)
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // ОБНОВЛЕННАЯ ВЕРХНЯЯ ПАНЕЛЬ
+            Box(
+                Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp, end = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Левая кнопка
-                IconButton(onClick = onBack) { 
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) 
+                // Левая кнопка (Эквалайзер)
+                IconButton(
+                    onClick = { showEq = true },
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) { 
+                    Icon(Icons.Outlined.Tune, contentDescription = "Equalizer", tint = Color.White) 
                 }
                 
-                // Центральный текст
+                // Центральный текст (Плейлист)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 1.sp)
                     Text(
                         text = state.playlistName ?: "Мои треки", 
                         color = Color.White, 
                         fontSize = 16.sp, 
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 
-                // Правые кнопки
-                Row {
-                    IconButton(onClick = { showEq = true }) { 
-                        Icon(Icons.Outlined.Tune, contentDescription = "Equalizer", tint = Color.White) 
-                    }
-                    IconButton(onClick = { showTrackMenu = true }) { 
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White) 
-                    }
+                // Правая кнопка (Меню)
+                IconButton(
+                    onClick = { showTrackMenu = true },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) { 
+                    Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White) 
                 }
             }
             
@@ -403,7 +407,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (МЕРЦАНИЕ УБРАНО, ЦЕНТРИРОВАНИЕ ЧЕРЕЗ SPACER)
+// ЭКРАН КАРАОКЕ (ИДЕАЛЬНОЕ ЦЕНТРИРОВАНИЕ И КРАСИВОЕ ВЫДЕЛЕНИЕ)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -423,15 +427,15 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
 
     var isUserScrolling by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress }
-            .collect { isScrolling ->
-                if (isScrolling) {
-                    isUserScrolling = true
-                } else {
-                    delay(3000)
-                    isUserScrolling = false
-                }
+        // Отслеживаем только пальцевые свайпы, чтобы автопрокрутка не отключалась при программном скролле
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                isUserScrolling = true
+            } else if (interaction is DragInteraction.Stop || interaction is DragInteraction.Cancel) {
+                delay(3000)
+                isUserScrolling = false
             }
+        }
     }
 
     LaunchedEffect(trackId) { 
@@ -466,7 +470,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // Просто скроллим к активному элементу. Благодаря Spacer сверху он будет по центру.
+    // Прокрутка к активному элементу (он всегда будет ровно по центру благодаря contentPadding)
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
             listState.animateScrollToItem(activeIndex)
@@ -555,41 +559,55 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
+                            // Вместо Spacer используем contentPadding: элемент всегда будет ровно в центре
+                            contentPadding = PaddingValues(vertical = screenHeight / 2)
                         ) {
-                            // ВЕРХНИЙ ОТСТУП - ЦЕНТРИРУЕТ АКТИВНУЮ СТРОКУ
-                            item { Spacer(modifier = Modifier.height(screenHeight / 2)) }
-                            
                             itemsIndexed(displayLyrics) { index, line ->
                                 val isActive = index == activeIndex
                                 
-                                // Только цвет меняется плавно. Без мерцания.
-                                val color by animateColorAsState(
-                                    targetValue = if (isActive) Red else Color.Gray,
+                                // Улучшенное выделение: красный фон, белый текст и легкое увеличение
+                                val textColor by animateColorAsState(
+                                    targetValue = if (isActive) Color.White else Color.Gray,
                                     animationSpec = tween(200),
-                                    label = "color"
+                                    label = "textColor"
+                                )
+                                val bgColor by animateColorAsState(
+                                    targetValue = if (isActive) Red else Color.Transparent,
+                                    animationSpec = tween(200),
+                                    label = "bgColor"
+                                )
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isActive) 1.1f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
+                                    label = "scale"
                                 )
 
-                                Text(
-                                    text = line.text,
-                                    color = color,
-                                    fontSize = 18.sp, // ФИКСИРОВАННЫЙ РАЗМЕР
-                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                    textAlign = TextAlign.Center,
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 16.dp, horizontal = 16.dp)
-                                        .pointerInput(Unit) {
-                                            detectTapGestures(
-                                                onDoubleTap = { 
-                                                    vm.seekTo(line.timeMs) 
-                                                }
-                                            )
-                                        }
-                                )
+                                        .padding(vertical = 8.dp, horizontal = 16.dp)
+                                        .graphicsLayer { scaleX = scale; scaleY = scale },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = line.text,
+                                        color = textColor,
+                                        fontSize = 18.sp,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier
+                                            .background(bgColor, RoundedCornerShape(16.dp))
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                            .pointerInput(Unit) {
+                                                detectTapGestures(
+                                                    onDoubleTap = { 
+                                                        vm.seekTo(line.timeMs) 
+                                                    }
+                                                )
+                                            }
+                                    )
+                                }
                             }
-                            
-                            // НИЖНИЙ ОТСТУП
-                            item { Spacer(modifier = Modifier.height(screenHeight / 2)) }
                         }
 
                         if (countdown != null) {
@@ -616,7 +634,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
     }
 }
 
-// (Остальные функции без изменений)
 @Composable
 fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
     var dragOffsetX by remember { mutableStateOf(0f) }
