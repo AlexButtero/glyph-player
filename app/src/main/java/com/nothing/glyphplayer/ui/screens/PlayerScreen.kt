@@ -177,7 +177,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ (УВЕЛИЧЕНА ДО 30)
+            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ (УВЕЛИЧЕНА ДО 28)
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -193,7 +193,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     Text(
                         text = currentLine?.text ?: "",
                         color = Red,
-                        fontSize = 30.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
