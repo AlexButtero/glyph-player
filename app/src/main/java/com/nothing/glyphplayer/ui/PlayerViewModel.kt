@@ -51,7 +51,7 @@ data class PlaybackState(
     val speed: Float = 1f,
     val sleepSecondsRemaining: Int? = null,
     val queue: List<MediaItem> = emptyList(),
-    val displayQueue: List<MediaItem> = emptyList(), // Виртуальная очередь для UI
+    val displayQueue: List<MediaItem> = emptyList(),
     val currentIndex: Int = 0,
     val playlistName: String? = "Мои треки"
 )
@@ -245,6 +245,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _lyricsOffsetMs = MutableStateFlow(prefs.getLong("lyrics_offset", 0L))
     val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs
 
+    private val _isWhiteLyrics = MutableStateFlow(prefs.getBoolean("is_white_lyrics", false))
+    val isWhiteLyrics: StateFlow<Boolean> = _isWhiteLyrics
+
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning
 
@@ -253,7 +256,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var sleepJob: Job? = null
     private var currentLyricsTrackId: Long? = null
     private var lastBackPressTime = 0L
-    private var originalQueue: List<MediaItem> = emptyList() // Исходная очередь
+    private var originalQueue: List<MediaItem> = emptyList()
 
     private val lifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) { startPolling() }
@@ -357,6 +360,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setLyricsOffset(offsetMs: Long) {
         _lyricsOffsetMs.value = offsetMs
         prefs.edit().putLong("lyrics_offset", offsetMs).apply()
+    }
+
+    fun toggleLyricsColor() {
+        val newValue = !_isWhiteLyrics.value
+        _isWhiteLyrics.value = newValue
+        prefs.edit().putBoolean("is_white_lyrics", newValue).apply()
     }
 
     fun handleBackButton() {
