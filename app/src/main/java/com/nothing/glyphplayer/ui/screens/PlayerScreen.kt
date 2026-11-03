@@ -89,7 +89,6 @@ fun PlayerScreen(
     var dragOffsetX by remember { mutableStateOf(0f) }
     var dragOffsetY by remember { mutableStateOf(0f) }
     
-    // Свайп постера
     var posterOffsetX by remember { mutableStateOf(0f) }
     val animatedPosterOffsetX by animateFloatAsState(
         targetValue = posterOffsetX,
@@ -111,14 +110,26 @@ fun PlayerScreen(
         KaraokeLyricsScreen(vm, state.currentTrackId, effectivePosition, onBack = { showLyrics = false }); return 
     }
     if (showQueue) { 
-        QueueScreen(state.queue, state.currentIndex, onBack = { showQueue = false }, onSelect = { vm.seekToIndex(it); showQueue = false }); return 
+        val uiIndex = state.displayQueue.indexOfFirst { it.mediaId == state.currentTrackId?.toString() }.coerceAtLeast(0)
+        QueueScreen(
+            queue = state.displayQueue,
+            currentIndex = uiIndex,
+            onBack = { showQueue = false },
+            onSelect = { displayIndex ->
+                val item = state.displayQueue.getOrNull(displayIndex)
+                if (item != null) {
+                    val originalIndex = state.queue.indexOfFirst { it.mediaId == item.mediaId }
+                    if (originalIndex != -1) vm.seekToIndex(originalIndex)
+                }
+                showQueue = false
+            }
+        ); return 
     }
 
     val currentArtistPoster = state.currentTrackId?.let { trackPosters[it] }
     val currentPoster = if (!state.artUri.isNullOrBlank()) state.artUri else currentArtistPoster
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // РАЗМЫТЫЙ ФОН
         AsyncImage(
             model = currentPoster,
             contentDescription = null,
@@ -148,7 +159,6 @@ fun PlayerScreen(
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ВЕРХНЯЯ ПАНЕЛЬ
             Box(
                 Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp, end = 8.dp),
                 contentAlignment = Alignment.Center
@@ -182,7 +192,6 @@ fun PlayerScreen(
             
             Spacer(Modifier.height(8.dp))
 
-            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -209,7 +218,6 @@ fun PlayerScreen(
 
             Spacer(Modifier.weight(1f))
 
-            // ПОСТЕР
             val posterPx = with(LocalDensity.current) { 280.dp.toPx() }
             Box(
                 modifier = Modifier
@@ -406,9 +414,6 @@ fun PlayerScreen(
     }
 }
 
-// ============================================================================
-// ЭКРАН КАРАОКЕ
-// ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
     val context = LocalContext.current
