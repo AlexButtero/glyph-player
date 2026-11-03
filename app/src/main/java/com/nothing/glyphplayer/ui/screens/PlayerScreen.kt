@@ -143,7 +143,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ОБНОВЛЕННАЯ ВЕРХНЯЯ ПАНЕЛЬ
+            // ВЕРХНЯЯ ПАНЕЛЬ
             Box(
                 Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp, end = 8.dp),
                 contentAlignment = Alignment.Center
@@ -407,7 +407,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ИДЕАЛЬНОЕ ЦЕНТРИРОВАНИЕ И КРАСИВОЕ ВЫДЕЛЕНИЕ)
+// ЭКРАН КАРАОКЕ (ИДЕАЛЬНОЕ ЦЕНТРИРОВАНИЕ И СТИЛЬ SPOTIFY/YANDEX)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -470,7 +470,7 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // Прокрутка к активному элементу (он всегда будет ровно по центру благодаря contentPadding)
+    // Прокрутка к активному элементу
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
             listState.animateScrollToItem(activeIndex)
@@ -488,56 +488,13 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 )
             }
     ) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!isEditing) {
-                        IconButton(onClick = { showOffsetControls = !showOffsetControls }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Offset", tint = if (showOffsetControls) Red else Color.Gray, modifier = Modifier.size(20.dp))
-                        }
-                        TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
-                    } else {
-                        TextButton(onClick = { vm.saveLyrics(trackId!!, formatLyrics(manualText)); isEditing = false }) { 
-                            Text(stringResource(R.string.lyrics_save), color = Red) 
-                        }
-                    }
-                }
-            }
-
-            AnimatedVisibility(visible = showOffsetControls && !isEditing) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                ) {
-                    Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Задержка текста: ${String.format("%.1f", offsetMs / 1000f)} сек",
-                            color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = { vm.setLyricsOffset(offsetMs - 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                                Text("-0.1s", color = Color.White)
-                            }
-                            Slider(
-                                value = offsetMs.toFloat(),
-                                onValueChange = { vm.setLyricsOffset(it.toLong()) },
-                                valueRange = -2000f..2000f,
-                                colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
-                                modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
-                            )
-                            Button(onClick = { vm.setLyricsOffset(offsetMs + 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                                Text("+0.1s", color = Color.White)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if (isEditing) {
+        // ОСНОВНОЙ КОНТЕНТ (Текст караоке или редактор)
+        if (isEditing) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = 72.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)
+            ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     TextButton(onClick = { 
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -553,83 +510,141 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                     placeholder = { Text(stringResource(R.string.lyrics_hint), color = Color.Gray) }, 
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
-            } else {
-                if (displayLyrics.isNotEmpty()) {
-                    Box(Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            // Вместо Spacer используем contentPadding: элемент всегда будет ровно в центре
-                            contentPadding = PaddingValues(vertical = screenHeight / 2)
-                        ) {
-                            itemsIndexed(displayLyrics) { index, line ->
-                                val isActive = index == activeIndex
-                                
-                                // Улучшенное выделение: красный фон, белый текст и легкое увеличение
-                                val textColor by animateColorAsState(
-                                    targetValue = if (isActive) Color.White else Color.Gray,
-                                    animationSpec = tween(200),
-                                    label = "textColor"
-                                )
-                                val bgColor by animateColorAsState(
-                                    targetValue = if (isActive) Red else Color.Transparent,
-                                    animationSpec = tween(200),
-                                    label = "bgColor"
-                                )
-                                val scale by animateFloatAsState(
-                                    targetValue = if (isActive) 1.1f else 1f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
-                                    label = "scale"
-                                )
+            }
+        } else if (displayLyrics.isNotEmpty()) {
+            // СПИСОК НА ВЕСЬ ЭКРАН (Идеальное центрирование благодаря contentPadding)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = (screenHeight / 2) - 32.dp) // Вычитаем половину высоты строки для точного центра
+            ) {
+                itemsIndexed(displayLyrics) { index, line ->
+                    val isActive = index == activeIndex
+                    
+                    // Плавное изменение цвета, размера и прозрачности
+                    val textColor by animateColorAsState(
+                        targetValue = if (isActive) Red else Color.Gray,
+                        animationSpec = tween(200),
+                        label = "textColor"
+                    )
+                    val scale by animateFloatAsState(
+                        targetValue = if (isActive) 1.15f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
+                        label = "scale"
+                    )
+                    val alpha by animateFloatAsState(
+                        targetValue = if (isActive) 1f else 0.5f,
+                        animationSpec = tween(200),
+                        label = "alpha"
+                    )
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp, horizontal = 16.dp)
-                                        .graphicsLayer { scaleX = scale; scaleY = scale },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = line.text,
-                                        color = textColor,
-                                        fontSize = 18.sp,
-                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier
-                                            .background(bgColor, RoundedCornerShape(16.dp))
-                                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                                            .pointerInput(Unit) {
-                                                detectTapGestures(
-                                                    onDoubleTap = { 
-                                                        vm.seekTo(line.timeMs) 
-                                                    }
-                                                )
-                                            }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp, horizontal = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = line.text,
+                            color = textColor.copy(alpha = alpha),
+                            fontSize = 18.sp,
+                            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Normal,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .graphicsLayer { scaleX = scale; scaleY = scale }
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onDoubleTap = { vm.seekTo(line.timeMs) }
                                     )
                                 }
-                            }
-                        }
-
-                        if (countdown != null) {
-                            Text(
-                                text = countdown.toString(),
-                                color = Red,
-                                fontSize = 48.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
-                        }
-                    }
-                } else if (manualText.isNotBlank()) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 16.dp)) { 
-                        Text(manualText, color = Color.White, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.5f) 
-                    }
-                } else {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
-                        Text(stringResource(R.string.lyrics_no_text), color = Color.Gray) 
+                        )
                     }
                 }
             }
+        } else if (manualText.isNotBlank()) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = 72.dp, start = 16.dp, end = 16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) { 
+                Text(manualText, color = Color.White, style = MaterialTheme.typography.bodyLarge, lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.5f) 
+            }
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
+                Text(stringResource(R.string.lyrics_no_text), color = Color.Gray) 
+            }
+        }
+
+        // ВЕРХНЯЯ ПАНЕЛЬ (Поверх контента)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp)) }
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!isEditing) {
+                    IconButton(onClick = { showOffsetControls = !showOffsetControls }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Offset", tint = if (showOffsetControls) Red else Color.Gray, modifier = Modifier.size(20.dp))
+                    }
+                    TextButton(onClick = { isEditing = true }) { Text(stringResource(R.string.lyrics_edit), color = Red) }
+                } else {
+                    TextButton(onClick = { vm.saveLyrics(trackId!!, formatLyrics(manualText)); isEditing = false }) { 
+                        Text(stringResource(R.string.lyrics_save), color = Red) 
+                    }
+                }
+            }
+        }
+
+        // ПАНЕЛЬ СМЕЩЕНИЯ (Под шапкой)
+        AnimatedVisibility(
+            visible = showOffsetControls && !isEditing,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp, start = 16.dp, end = 16.dp)
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Задержка текста: ${String.format("%.1f", offsetMs / 1000f)} сек",
+                        color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = { vm.setLyricsOffset(offsetMs - 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                            Text("-0.1s", color = Color.White)
+                        }
+                        Slider(
+                            value = offsetMs.toFloat(),
+                            onValueChange = { vm.setLyricsOffset(it.toLong()) },
+                            valueRange = -2000f..2000f,
+                            colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
+                            modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
+                        )
+                        Button(onClick = { vm.setLyricsOffset(offsetMs + 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                            Text("+0.1s", color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ТАЙМЕР ОТСЧЕТА
+        if (countdown != null && !isEditing) {
+            Text(
+                text = countdown.toString(),
+                color = Red,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }
