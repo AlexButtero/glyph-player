@@ -9,8 +9,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -35,7 +33,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -85,6 +82,8 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
     var pendingDeleteTrack by remember { mutableStateOf<Track?>(null) }
     
     var sliderPos by remember { mutableStateOf<Float?>(null) }
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
     
     // Свайп постера
     var posterOffsetX by remember { mutableStateOf(0f) }
@@ -126,39 +125,19 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(16.dp)
                 .pointerInput(Unit) {
-                    // ИСПРАВЛЕНИЕ КОНФЛИКТА ЖЕСТОВ: кастомный обработчик не мешает слайдеру
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = true)
-                        var dragX = 0f
-                        var dragY = 0f
-                        var isDrag = false
-                        var pointerId = down.id
-                        
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                    detectDragGestures(
+                        onDragEnd = {
+                            if (dragOffsetX > 150f) onBack()
+                            else if (dragOffsetX < -150f) showQueue = true
+                            else if (dragOffsetY > 150f) showLyrics = true
+                            else if (dragOffsetY < -150f) showLyrics = true
                             
-                            if (change.isConsumed) break
-                            
-                            val dragAmount = change.positionChange()
-                            if (dragAmount.getDistance() > 0f) {
-                                isDrag = true
-                                change.consume()
-                                dragX += dragAmount.x
-                                dragY += dragAmount.y
-                            }
-                            
-                            if (!change.pressed) {
-                                if (isDrag) {
-                                    if (dragX > 150f) onBack()
-                                    else if (dragX < -150f) showQueue = true
-                                    else if (dragY > 150f) showLyrics = true
-                                    else if (dragY < -150f) showLyrics = true
-                                }
-                                break
-                            }
+                            dragOffsetX = 0f; dragOffsetY = 0f
+                        },
+                        onDrag = { change, dragAmount -> 
+                            change.consume(); dragOffsetX += dragAmount.x; dragOffsetY += dragAmount.y 
                         }
-                    }
+                    )
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -417,7 +396,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ПЛАВНАЯ АНИМАЦИЯ БЕЗ ПЕРЕНОСОВ)
+// ЭКРАН КАРАОКЕ (ПЛАВНАЯ АНИМАЦИЯ БЕЗ ОБРЕЗАНИЯ)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -526,20 +505,23 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                     itemsIndexed(displayLyrics) { index, line ->
                         val isActive = index == activeIndex
                         
+                        // Анимация жирности
                         val animatedWeight by animateIntAsState(
                             targetValue = if (isActive) 800 else 400,
                             animationSpec = tween(300),
                             label = "weight"
                         )
+                        // Анимация прозрачности
                         val animatedAlpha by animateFloatAsState(
                             targetValue = if (isActive) 1f else 0.5f,
                             animationSpec = tween(300),
                             label = "alpha"
                         )
-                        val animatedScale by animateFloatAsState(
-                            targetValue = if (isActive) 1.15f else 1f,
+                        // Анимация размера шрифта (вместо scale, чтобы не было обрезания)
+                        val animatedFontSize by animateFloatAsState(
+                            targetValue = if (isActive) 20f else 16f,
                             animationSpec = tween(300),
-                            label = "scale"
+                            label = "fontSize"
                         )
 
                         Box(
@@ -548,25 +530,24 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 .padding(vertical = 12.dp, horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Невидимый текст для резервирования места под самый жирный вариант
+                            // 1. НЕВИДИМЫЙ ТЕКСТ: Резервирует максимальное место (20.sp, ExtraBold)
                             Text(
                                 text = line.text,
                                 color = Color.Transparent,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 18.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 8.dp)
+                                fontSize = 20.sp,
+                                textAlign = TextAlign.Center
                             )
                             
+                            // 2. АНИМИРОВАННЫЙ ТЕКСТ (видимый)
                             Text(
                                 text = line.text,
                                 color = if (isActive) Red else Color.Gray,
                                 fontWeight = FontWeight(animatedWeight),
-                                fontSize = 18.sp,
+                                fontSize = animatedFontSize.sp,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier
                                     .alpha(animatedAlpha)
-                                    .graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }
                                     .pointerInput(Unit) {
                                         detectTapGestures(
                                             onDoubleTap = { vm.seekTo(line.timeMs) }
@@ -673,11 +654,17 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
             
-            // ОПТИМИЗАЦИЯ: Больше не создаем новый список из 700+ элементов при каждом чихе
+            val displayQueue = remember(queue, currentIndex) {
+                if (queue.isNotEmpty() && currentIndex in queue.indices) {
+                    val firstPart = queue.subList(currentIndex, queue.size).toList()
+                    val secondPart = queue.subList(0, currentIndex).toList()
+                    firstPart + secondPart
+                } else queue
+            }
+
             LazyColumn(Modifier.fillMaxSize()) {
-                items(queue.size) { uiIndex ->
+                itemsIndexed(displayQueue) { uiIndex, item ->
                     val realIndex = if (queue.isNotEmpty()) (currentIndex.coerceAtLeast(0) + uiIndex) % queue.size else 0
-                    val item = queue[realIndex]
                     val isCurrent = uiIndex == 0 
 
                     Row(Modifier.fillMaxWidth().clickable { onSelect(realIndex) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
