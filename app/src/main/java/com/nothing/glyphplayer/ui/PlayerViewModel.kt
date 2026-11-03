@@ -53,7 +53,6 @@ data class PlaybackState(
     val playlistName: String? = "Мои треки"
 )
 
-// Утилита: получаем "главного" исполнителя для ключа.
 fun resolveArtistKey(title: String?, artist: String?): String {
     val rawArtist = if (artist.isNullOrBlank() || artist.equals("<unknown>", true)) {
         if (!title.isNullOrBlank() && title.contains(" - ")) {
@@ -85,16 +84,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
     val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
 
-    // КАРТА ПОСТЕРОВ: TrackId -> URI постера (собственного или исполнителя)
+    // КАРТА ПОСТЕРОВ: TrackId -> URI постера
     val trackPosters: StateFlow<Map<Long, String>> = library
         .map { lib ->
             val artistToPoster = mutableMapOf<String, String>()
-            // 1) Собираем постер для каждого артиста (первый найденный)
+            // 1) Собираем постер для каждого артиста (первый найденный рабочий)
             lib.forEach { track ->
                 if (!track.artUri.isNullOrBlank()) {
                     val key = resolveArtistKey(track.title, track.artist)
                     if (!artistToPoster.containsKey(key)) {
-                        artistToPoster[key] = track.artUri
+                        artistToPoster[key] = track.artUri!!
                     }
                 }
             }
