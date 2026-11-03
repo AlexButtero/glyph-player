@@ -233,7 +233,7 @@ fun ArtistsScreen(
                     items(displayedArtists, key = { it }) { artistName ->
                         val group = grouped[artistName]
                         val trackCount = group?.tracks?.size ?: 0
-                        val posterUri = artistPosters[artistName] // Берем постер из карты
+                        val posterUri = artistPosters[artistName]
                         
                         Row(
                             Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
