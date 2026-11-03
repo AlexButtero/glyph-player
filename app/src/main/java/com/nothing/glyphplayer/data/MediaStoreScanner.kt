@@ -29,11 +29,15 @@ class MediaStoreScanner(private val ctx: Context) {
                 val id = c.getLong(idI)
                 val albumId = c.getLong(alIdI)
                 val dateAddedSec = c.getLong(dAddI)
+                
+                // ИСПРАВЛЕНИЕ: Если albumId = 0, ссылка на обложку невалидна. Оставляем null.
+                val artUri = if (albumId > 0) "content://media/external/audio/albumart/$albumId" else null
+
                 out += Track(
                     id = id, title = c.getString(tI) ?: "Unknown",
                     artist = c.getString(aI) ?: "Unknown", album = c.getString(alI) ?: "Unknown",
                     durationMs = c.getLong(dI), uri = "content://media/external/audio/media/$id",
-                    artUri = "content://media/external/audio/albumart/$albumId",
+                    artUri = artUri,
                     dateAdded = dateAddedSec * 1000L
                 )
             }
