@@ -31,114 +31,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
+import com.nothing.glyphplayer.ui.ArtistGroup
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.URLDecoder
-
-private val BRACKET_REGEX = Regex("\\[.*?\\]")
-private val FEAT_PAREN_REGEX = Regex("(?i)\\(.*?feat.*?\\)")
-private val SPLIT_REGEX = Regex("(?i)\\s*(feat\\.?|ft\\.?|&|,|vs\\.?|x)\\s*")
-private val NON_ALNUM_REGEX = Regex("[^a-zа-я0-9]")
-
-fun cleanArtistName(raw: String): String {
-    var clean = raw
-    try { clean = URLDecoder.decode(clean, "UTF-8") } catch (_: Exception) {}
-    clean = BRACKET_REGEX.replace(clean, "")
-    clean = FEAT_PAREN_REGEX.replace(clean, "")
-    return clean.trim().removeSurrounding("\"").removeSurrounding("'").trim()
-}
-
-fun splitArtistsWithPrimary(rawArtist: String?): List<Pair<String, Boolean>> {
-    if (rawArtist.isNullOrBlank() || rawArtist.equals("<unknown>", true)) return emptyList()
-    val processed = SPLIT_REGEX.replace(rawArtist, "|")
-    return processed.split("|")
-        .map { cleanArtistName(it) }
-        .filter { it.isNotBlank() && it.length > 1 && !it.equals("<unknown>", true) }
-        .mapIndexed { index, name -> name to (index == 0) }
-}
-
-fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
-    val fromMeta = splitArtistsWithPrimary(track.artist)
-    if (fromMeta.isNotEmpty()) return fromMeta
-    if (track.title.contains(" - ")) {
-        val parts = track.title.split(" - ", limit = 2)
-        if (parts.size == 2) {
-            val fromTitle = splitArtistsWithPrimary(parts[0])
-            if (fromTitle.isNotEmpty()) return fromTitle
-        }
-    }
-    return listOf("Unknown Artist" to true)
-}
-
-fun normalizeForGrouping(name: String): String = NON_ALNUM_REGEX.replace(name.lowercase(), "").trim()
-
-fun isSimilarArtist(a: String, b: String): Boolean {
-    if (a == b) return true
-    if (a.length < 3 || b.length < 3) return false
-    val normA = normalizeForGrouping(a)
-    val normB = normalizeForGrouping(b)
-    if (normA == normB) return true
-    val prefixLen = minOf(4, minOf(normA.length, normB.length))
-    return prefixLen >= 3 && normA.take(prefixLen) == normB.take(prefixLen)
-}
-
-data class ArtistGroup(
-    val name: String, 
-    val tracks: List<Track>, 
-    val isPrimary: Boolean,
-    val posterUri: String?
-)
-
-fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<String, ArtistGroup> {
-    val allArtists = mutableSetOf<String>()
-    val trackToArtists = mutableMapOf<Track, List<Pair<String, Boolean>>>()
-
-    library.forEach { track ->
-        val artists = extractArtistsWithPrimaryFlag(track)
-        trackToArtists[track] = artists
-        artists.forEach { allArtists.add(it.first) }
-    }
-
-    val canonicalMap = mutableMapOf<String, String>()
-    val processed = mutableSetOf<String>()
-    val sortedArtists = allArtists.sortedBy { it.length }
-
-    for (i in sortedArtists.indices) {
-        val current = sortedArtists[i]
-        if (current in processed) continue
-        val group = mutableListOf(current)
-        processed.add(current)
-        for (j in i + 1 until sortedArtists.size) {
-            val other = sortedArtists[j]
-            if (other in processed) continue
-            if (isSimilarArtist(current, other)) {
-                group.add(other)
-                processed.add(other)
-            }
-        }
-        val bestName = group.maxByOrNull { it.length } ?: current
-        val capitalizedName = bestName.replaceFirstChar { it.uppercase() }
-        group.forEach { canonicalMap[it] = capitalizedName }
-    }
-
-    val result = mutableMapOf<String, MutableList<Pair<Track, Boolean>>>()
-    trackToArtists.forEach { (track, artists) ->
-        artists.forEach { (rawArtist, isPrimary) ->
-            val canonical = canonicalMap[rawArtist] ?: rawArtist
-            result.getOrPut(canonical) { mutableListOf() }.add(track to isPrimary)
-        }
-    }
-
-    return result.mapValues { (canonicalName, list) ->
-        val uniqueTracks = list.map { it.first }.distinctBy { it.id }
-        val isPrimary = list.any { it.second }
-        val posterUri = uniqueTracks.firstNotNullOfOrNull { trackPosters[it.id] }
-        ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,26 +44,15 @@ fun ArtistsScreen(
     onTrackClick: () -> Unit
 ) {
     val lib by vm.library.collectAsState()
+    val grouped by vm.artistGroups.collectAsState() // Мгновенная загрузка из кэша VM
     val selectedArtist by vm.selectedArtist.collectAsState()
     
     var searchQuery by remember { mutableStateOf("") }
-    var grouped by remember { mutableStateOf<Map<String, ArtistGroup>>(emptyMap()) }
-    var isCalculating by remember { mutableStateOf(false) }
     
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
-    LaunchedEffect(lib, trackPosters) {
-        if (lib.isNotEmpty()) {
-            isCalculating = true
-            grouped = withContext(Dispatchers.Default) { buildArtistsMap(lib, trackPosters) }
-            isCalculating = false
-        } else {
-            grouped = emptyMap()
-        }
-    }
 
     val displayedArtists = remember(grouped, searchQuery) {
         val query = searchQuery.trim().lowercase()
@@ -176,35 +61,21 @@ fun ArtistsScreen(
         filtered.sortedByDescending { it.tracks.size }.map { it.name }
     }
 
-    // Логика обработки выбранного артиста — стейт живет в ViewModel
     if (selectedArtist != null) {
         val group = grouped[selectedArtist]
-        when {
-            group != null -> {
-                ArtistTracksScreen(
-                    artistName = group.name, 
-                    tracks = group.tracks, 
-                    trackPosters = trackPosters,
-                    onBack = { vm.selectArtist(null) }, 
-                    vm = vm, 
-                    onTrackClick = onTrackClick
-                )
-            }
-            lib.isNotEmpty() && grouped.isEmpty() -> {
-                // Библиотека загружена, но группировка еще не закончена
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Red)
-                }
-            }
-            lib.isEmpty() -> {
-                // Библиотека еще не загружена
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Red)
-                }
-            }
-            else -> {
-                // Артист реально не найден — сбрасываем
-                vm.selectArtist(null)
+        if (group != null) {
+            ArtistTracksScreen(
+                artistName = group.name, 
+                tracks = group.tracks, 
+                trackPosters = trackPosters,
+                onBack = { vm.selectArtist(null) }, 
+                vm = vm, 
+                onTrackClick = onTrackClick
+            )
+        } else {
+            // Данные еще не подъехали
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Red)
             }
         }
         return
@@ -241,50 +112,44 @@ fun ArtistsScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
             )
 
-            if (isCalculating) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Red)
-                }
-            } else {
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                    items(displayedArtists, key = { it }) { artistName ->
-                        val group = grouped[artistName]
-                        val trackCount = group?.tracks?.size ?: 0
-                        val posterUri = group?.posterUri
-                        
-                        Row(
-                            Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                items(displayedArtists, key = { it }) { artistName ->
+                    val group = grouped[artistName]
+                    val trackCount = group?.tracks?.size ?: 0
+                    val posterUri = group?.posterUri
+                    
+                    Row(
+                        Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(Color(0xFF222222)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .background(Color(0xFF222222)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (posterUri != null) {
-                                    AsyncImage(
-                                        model = posterUri,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    Text(
-                                        text = artistName.take(1).uppercase(),
-                                        color = Color.Gray,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                            if (posterUri != null) {
+                                AsyncImage(
+                                    model = posterUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = artistName.take(1).uppercase(),
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                         }
-                        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                        Spacer(Modifier.width(12.dp))
+                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                     }
+                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                 }
             }
         }
