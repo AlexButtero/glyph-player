@@ -103,15 +103,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 val newController = future.get()
                 controller = newController
                 
+                // Исправлено: используем только Player.Listener (MediaController.Listener не существует)
                 newController.addListener(object : Player.Listener {
                     override fun onEvents(player: Player, events: Player.Events) = refresh()
-                })
-                
-                // Защита от разрыва связи с сервисом
-                newController.addListener(object : MediaController.Listener {
-                    override fun onDisconnected(c: MediaController) {
-                        if (controller == c) controller = null
-                    }
                 })
                 
                 // Загружаем очередь в фоновом потоке
