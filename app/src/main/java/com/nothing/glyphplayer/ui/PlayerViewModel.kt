@@ -55,11 +55,7 @@ data class PlaybackState(
 
 fun resolveArtistKey(title: String?, artist: String?): String {
     val rawArtist = if (artist.isNullOrBlank() || artist.equals("<unknown>", true)) {
-        if (!title.isNullOrBlank() && title.contains(" - ")) {
-            title.split(" - ", limit = 2)[0]
-        } else {
-            "Unknown"
-        }
+        if (!title.isNullOrBlank() && title.contains(" - ")) title.split(" - ", limit = 2)[0] else "Unknown"
     } else artist
 
     var clean = rawArtist
@@ -84,20 +80,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val library: StateFlow<List<Track>> = repo.tracks.stateIn(scope, SharingStarted.Lazily, emptyList())
     val playlists: StateFlow<List<Playlist>> = repo.playlists.stateIn(scope, SharingStarted.Lazily, emptyList())
 
-    // КАРТА ПОСТЕРОВ: TrackId -> URI постера
+    // КАРТА ПОСТЕРОВ
     val trackPosters: StateFlow<Map<Long, String>> = library
         .map { lib ->
             val artistToPoster = mutableMapOf<String, String>()
-            // 1) Собираем постер для каждого артиста (первый найденный рабочий)
             lib.forEach { track ->
                 if (!track.artUri.isNullOrBlank()) {
                     val key = resolveArtistKey(track.title, track.artist)
-                    if (!artistToPoster.containsKey(key)) {
-                        artistToPoster[key] = track.artUri!!
-                    }
+                    if (!artistToPoster.containsKey(key)) artistToPoster[key] = track.artUri!!
                 }
             }
-            // 2) Присваиваем постер каждому треку
             val result = mutableMapOf<Long, String>()
             lib.forEach { track ->
                 val own = track.artUri
@@ -112,6 +104,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
         .flowOn(Dispatchers.Default)
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
+    // === НАВИГАЦИОННЫЙ СТЕЙТ (живет в ViewModel, переживает все переходы) ===
+    private val _selectedArtist = MutableStateFlow<String?>(null)
+    val selectedArtist: StateFlow<String?> = _selectedArtist
+    fun selectArtist(name: String?) { _selectedArtist.value = name }
+
+    private val _selectedPlaylistId = MutableStateFlow<Long?>(null)
+    val selectedPlaylistId: StateFlow<Long?> = _selectedPlaylistId
+    fun selectPlaylist(id: Long?) { _selectedPlaylistId.value = id }
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
@@ -222,13 +223,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     val c = controller
                     if (c != null) {
                         val newPos = c.currentPosition.coerceAtLeast(0)
-                        if (abs(_positionMs.value - newPos) >= 100) {
-                            _positionMs.value = newPos
-                        }
+                        if (abs(_positionMs.value - newPos) >= 100) _positionMs.value = newPos
                         val newDur = c.duration.coerceAtLeast(0)
-                        if (_state.value.durationMs != newDur) {
-                            _state.update { it.copy(durationMs = newDur) }
-                        }
+                        if (_state.value.durationMs != newDur) _state.update { it.copy(durationMs = newDur) }
                     }
                 } catch (_: Exception) {}
                 delay(500)
