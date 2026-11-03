@@ -27,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -145,7 +146,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                 Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp, end = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Левая кнопка (Эквалайзер)
                 IconButton(
                     onClick = { showEq = true },
                     modifier = Modifier.align(Alignment.CenterStart)
@@ -153,7 +153,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     Icon(Icons.Outlined.Tune, contentDescription = "Equalizer", tint = Color.White) 
                 }
                 
-                // Центральный текст (Плейлист)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("ПЛЕЙЛИСТ", color = Color.Gray, fontSize = 10.sp, letterSpacing = 1.sp)
                     Text(
@@ -166,7 +165,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     )
                 }
                 
-                // Правая кнопка (Меню)
                 IconButton(
                     onClick = { showTrackMenu = true },
                     modifier = Modifier.align(Alignment.CenterEnd)
@@ -177,7 +175,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(8.dp))
 
-            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ (УВЕЛИЧЕНА ДО 28)
+            // ТЕКУЩАЯ СТРОКА С БЕГУЩЕЙ СТРОКОЙ
             AnimatedVisibility(
                 visible = currentLine != null,
                 enter = fadeIn() + slideInVertically(),
@@ -193,7 +191,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     Text(
                         text = currentLine?.text ?: "",
                         color = Red,
-                        fontSize = 28.sp,
+                        fontSize = 30.sp,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
@@ -225,7 +223,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                         )
                     }
             ) {
-                // ПРЕДЫДУЩИЙ ПОСТЕР
                 val prevIndex = state.currentIndex - 1
                 if (prevIndex >= 0 && prevIndex < state.queue.size) {
                     val prevArt = state.queue[prevIndex].mediaMetadata.artworkUri
@@ -241,7 +238,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     }
                 }
                 
-                // СЛЕДУЮЩИЙ ПОСТЕР
                 val nextIndex = state.currentIndex + 1
                 if (nextIndex >= 0 && nextIndex < state.queue.size) {
                     val nextArt = state.queue[nextIndex].mediaMetadata.artworkUri
@@ -257,7 +253,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
                     }
                 }
                 
-                // ТЕКУЩИЙ ПОСТЕР
                 AsyncImage(
                     model = state.artUri,
                     contentDescription = null,
@@ -281,7 +276,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             
             Spacer(Modifier.height(16.dp))
 
-            // Слайдер
             val duration = state.durationMs.coerceAtLeast(1)
             val currentPos = sliderPos ?: positionMs.toFloat()
             Slider(
@@ -298,7 +292,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            // Кнопки
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { vm.toggleShuffle() }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (state.shuffle) Red else Color.Gray, modifier = Modifier.size(28.dp)) }
                 IconButton(onClick = { vm.handleBackButton() }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.White, modifier = Modifier.size(36.dp)) }
@@ -311,7 +304,6 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
             HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
             Spacer(Modifier.height(16.dp))
 
-            // НИЖНИЕ КНОПКИ
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 TextButton(onClick = { showQueue = true }) { 
                     Text(stringResource(R.string.queue_title), color = Color.White, style = MaterialTheme.typography.labelSmall) 
@@ -404,7 +396,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ИСПРАВЛЕНО ЦЕНТРИРОВАНИЕ)
+// ЭКРАН КАРАОКЕ (С ПЛАВНОЙ АНИМАЦИЕЙ БЕЗ ПЕРЕНОСОВ)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -503,48 +495,62 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                 )
             }
         } else if (displayLyrics.isNotEmpty()) {
-            // ИСПОЛЬЗУЕМ BoxWithConstraints ДЛЯ ТОЧНОГО ЦЕНТРИРОВАНИЯ
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val halfHeight = maxHeight / 2
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    // Отступ ровно половина экрана минус половина высоты текста
                     contentPadding = PaddingValues(top = halfHeight - 32.dp, bottom = halfHeight)
                 ) {
                     itemsIndexed(displayLyrics) { index, line ->
                         val isActive = index == activeIndex
                         
-                        val textColor by animateColorAsState(
-                            targetValue = if (isActive) Red else Color.Gray,
-                            animationSpec = tween(200),
-                            label = "textColor"
+                        // Анимация жирности (400 = Normal, 800 = ExtraBold)
+                        val animatedWeight by animateIntAsState(
+                            targetValue = if (isActive) 800 else 400,
+                            animationSpec = tween(300),
+                            label = "weight"
                         )
-                        val scale by animateFloatAsState(
-                            targetValue = if (isActive) 1.15f else 1f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
-                            label = "scale"
-                        )
-                        val alpha by animateFloatAsState(
+                        // Анимация прозрачности
+                        val animatedAlpha by animateFloatAsState(
                             targetValue = if (isActive) 1f else 0.5f,
-                            animationSpec = tween(200),
+                            animationSpec = tween(300),
                             label = "alpha"
+                        )
+                        // Анимация размера
+                        val animatedScale by animateFloatAsState(
+                            targetValue = if (isActive) 1.15f else 1f,
+                            animationSpec = tween(300),
+                            label = "scale"
                         )
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 16.dp, horizontal = 24.dp),
+                                .padding(vertical = 12.dp, horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
+                            // 1. НЕВИДИМЫЙ ТЕКСТ: Резервирует место под самый жирный вариант,
+                            // чтобы избежать резкого переноса строк при анимации
                             Text(
                                 text = line.text,
-                                color = textColor.copy(alpha = alpha),
+                                color = Color.Transparent,
+                                fontWeight = FontWeight.ExtraBold,
                                 fontSize = 18.sp,
-                                fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Normal,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            
+                            // 2. АНИМИРОВАННЫЙ ТЕКСТ (видимый)
+                            Text(
+                                text = line.text,
+                                color = if (isActive) Red else Color.Gray,
+                                fontWeight = FontWeight(animatedWeight),
+                                fontSize = 18.sp,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier
-                                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                                    .alpha(animatedAlpha)
+                                    .graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }
                                     .pointerInput(Unit) {
                                         detectTapGestures(
                                             onDoubleTap = { vm.seekTo(line.timeMs) }
