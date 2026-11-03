@@ -79,6 +79,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var controller: MediaController? = null
     private var pollJob: Job? = null
     private var sleepJob: Job? = null
+    private var actionJob: Job? = null
     private var currentLyricsTrackId: Long? = null
     private var lastBackPressTime = 0L
     private var originalQueue: List<MediaItem> = emptyList()
@@ -105,7 +106,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     override fun onEvents(player: Player, events: Player.Events) = refresh()
                 })
                 
-                // ОПТИМИЗАЦИЯ: Загружаем очередь в фоновом потоке, чтобы не вешать UI
                 val c = controller
                 if (c != null && c.mediaItemCount > 0) {
                     scope.launch(Dispatchers.IO) {
@@ -194,17 +194,22 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0, playlistName: String = "Мои треки") {
         val c = controller ?: return
-        scope.launch(Dispatchers.Default) {
-            val items = tracks.map { it.toMediaItem() }
-            if (items.isEmpty()) return@launch
-            
-            originalQueue = items
-            withContext(Dispatchers.Main) {
-                _state.update { it.copy(shuffle = false, playlistName = playlistName, queue = items) }
-                c.shuffleModeEnabled = false
-                c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
-                c.prepare()
-                c.play()
+        actionJob?.cancel()
+        actionJob = scope.launch(Dispatchers.Default) {
+            try {
+                val items = tracks.map { it.toMediaItem() }
+                if (items.isEmpty()) return@launch
+                
+                originalQueue = items
+                withContext(Dispatchers.Main) {
+                    _state.update { it.copy(shuffle = false, playlistName = playlistName, queue = items) }
+                    c.shuffleModeEnabled = false
+                    c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0)
+                    c.prepare()
+                    c.play()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -231,29 +236,34 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val wasPlaying = c.isPlaying
         val newShuffle = !_state.value.shuffle
 
-        scope.launch(Dispatchers.Default) {
-            val currentQueue = _state.value.queue.toMutableList()
-            if (currentQueue.isEmpty()) return@launch
+        actionJob?.cancel()
+        actionJob = scope.launch(Dispatchers.Default) {
+            try {
+                val currentQueue = _state.value.queue.toMutableList()
+                if (currentQueue.isEmpty()) return@launch
 
-            if (newShuffle) {
-                originalQueue = currentQueue.toList()
-                currentQueue.shuffle()
-            } else {
-                if (originalQueue.isNotEmpty()) {
-                    currentQueue.clear()
-                    currentQueue.addAll(originalQueue)
+                if (newShuffle) {
+                    originalQueue = currentQueue.toList()
+                    currentQueue.shuffle()
+                } else {
+                    if (originalQueue.isNotEmpty()) {
+                        currentQueue.clear()
+                        currentQueue.addAll(originalQueue)
+                    }
                 }
-            }
 
-            val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
-            val finalQueue = if (newIndex != -1) currentQueue else currentQueue.apply { add(0, currentItem) }
-            val finalIndex = if (newIndex != -1) newIndex else 0
-            
-            withContext(Dispatchers.Main) {
-                _state.update { it.copy(shuffle = newShuffle, queue = finalQueue, currentIndex = finalIndex) }
-                c.setMediaItems(finalQueue, finalIndex, currentPos)
-                c.prepare()
-                if (wasPlaying) c.play()
+                val newIndex = currentQueue.indexOfFirst { it.mediaId == currentItem.mediaId }
+                val finalQueue = if (newIndex != -1) currentQueue else currentQueue.apply { add(0, currentItem) }
+                val finalIndex = if (newIndex != -1) newIndex else 0
+                
+                withContext(Dispatchers.Main) {
+                    _state.update { it.copy(shuffle = newShuffle, queue = finalQueue, currentIndex = finalIndex) }
+                    c.setMediaItems(finalQueue, finalIndex, currentPos)
+                    c.prepare()
+                    if (wasPlaying) c.play()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -302,12 +312,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun addToQueue(tracks: List<Track>) { 
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
-            val items = tracks.map { it.toMediaItem() }
-            val newQueue = _state.value.queue + items
-            withContext(Dispatchers.Main) {
-                c.addMediaItems(items)
-                originalQueue = originalQueue + items
-                _state.update { it.copy(queue = newQueue) }
+            try {
+                val items = tracks.map { it.toMediaItem() }
+                val newQueue = _state.value.queue + items
+                withContext(Dispatchers.Main) {
+                    c.addMediaItems(items)
+                    originalQueue = originalQueue + items
+                    _state.update { it.copy(queue = newQueue) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -315,27 +329,31 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun playNext(tracks: List<Track>) { 
         val c = controller ?: return
         scope.launch(Dispatchers.Default) {
-            val items = tracks.map { it.toMediaItem() }
-            val currentIdx = c.currentMediaItemIndex.coerceAtLeast(0)
-            val insertIndex = (currentIdx + 1).coerceAtMost(c.mediaItemCount)
-            
-            val mutableOriginal = originalQueue.toMutableList()
-            val currentId = c.currentMediaItem?.mediaId
-            val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
-            if (originalCurrentIndex != -1) {
-                mutableOriginal.addAll((originalCurrentIndex + 1).coerceAtMost(mutableOriginal.size), items)
-            } else {
-                mutableOriginal.addAll(items)
-            }
-            
-            val newQueue = _state.value.queue.toMutableList().apply {
-                addAll(insertIndex.coerceAtMost(size), items)
-            }
-            
-            withContext(Dispatchers.Main) {
-                c.addMediaItems(insertIndex, items)
-                originalQueue = mutableOriginal
-                _state.update { it.copy(queue = newQueue) }
+            try {
+                val items = tracks.map { it.toMediaItem() }
+                val currentIdx = c.currentMediaItemIndex.coerceAtLeast(0)
+                val insertIndex = (currentIdx + 1).coerceAtMost(c.mediaItemCount)
+                
+                val mutableOriginal = originalQueue.toMutableList()
+                val currentId = c.currentMediaItem?.mediaId
+                val originalCurrentIndex = mutableOriginal.indexOfFirst { it.mediaId == currentId }
+                if (originalCurrentIndex != -1) {
+                    mutableOriginal.addAll((originalCurrentIndex + 1).coerceAtMost(mutableOriginal.size), items)
+                } else {
+                    mutableOriginal.addAll(items)
+                }
+                
+                val newQueue = _state.value.queue.toMutableList().apply {
+                    addAll(insertIndex.coerceAtMost(size), items)
+                }
+                
+                withContext(Dispatchers.Main) {
+                    c.addMediaItems(insertIndex, items)
+                    originalQueue = mutableOriginal
+                    _state.update { it.copy(queue = newQueue) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -391,7 +409,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
         } catch (_: Exception) { }
         
-        controller?.release(); controller = null; pollJob?.cancel(); sleepJob?.cancel(); super.onCleared()
+        controller?.release(); controller = null; pollJob?.cancel(); sleepJob?.cancel(); actionJob?.cancel(); super.onCleared()
     }
 
     private fun Track.toMediaItem(): MediaItem =
