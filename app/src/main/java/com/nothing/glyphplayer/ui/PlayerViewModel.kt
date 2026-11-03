@@ -47,7 +47,7 @@ data class PlaybackState(
     val sleepSecondsRemaining: Int? = null,
     val queue: List<MediaItem> = emptyList(),
     val currentIndex: Int = 0,
-    val playlistName: String? = "Мои треки" // Значение по умолчанию
+    val playlistName: String? = "Мои треки"
 )
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -128,7 +128,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     speed = c.playbackParameters.speed,
                     queue = q,
                     currentIndex = c.currentMediaItemIndex
-                    // playlistName НЕ перезаписывается здесь, он сохраняется из playTracks
                 )
             }
             
@@ -180,7 +179,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         else { seekTo(0); lastBackPressTime = now }
     }
 
-    // ИСПРАВЛЕНО: Явно передаем имя плейлиста
     fun playTracks(tracks: List<Track>, startIndex: Int = 0, playlistName: String = "Мои треки") {
         val c = controller ?: return
         try {
