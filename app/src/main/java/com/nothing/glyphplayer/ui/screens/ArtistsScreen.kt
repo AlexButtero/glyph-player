@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -95,7 +96,7 @@ data class ArtistGroup(
     val posterUri: String?
 )
 
-fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
+fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<String, ArtistGroup> {
     val allArtists = mutableSetOf<String>()
     val trackToArtists = mutableMapOf<Track, List<Pair<String, Boolean>>>()
 
@@ -140,7 +141,7 @@ fun buildArtistsMap(library: List<Track>): Map<String, ArtistGroup> {
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
         val isPrimary = list.any { it.second }
-        val posterUri = uniqueTracks.firstOrNull { !it.artUri.isNullOrBlank() }?.artUri
+        val posterUri = uniqueTracks.firstNotNullOfOrNull { trackPosters[it.id] }
         ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
     }
 }
@@ -162,10 +163,10 @@ fun ArtistsScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(lib) {
+    LaunchedEffect(lib, trackPosters) {
         if (lib.isNotEmpty()) {
             isCalculating = true
-            grouped = withContext(Dispatchers.Default) { buildArtistsMap(lib) }
+            grouped = withContext(Dispatchers.Default) { buildArtistsMap(lib, trackPosters) }
             isCalculating = false
         } else {
             grouped = emptyMap()
@@ -182,7 +183,8 @@ fun ArtistsScreen(
         filtered.sortedByDescending { it.tracks.size }.map { it.name }
     }
 
-    var selectedArtist by remember { mutableStateOf<String?>(null) }
+    // Используем rememberSaveable, чтобы сохранять состояние при переходе в плеер и обратно
+    var selectedArtist by rememberSaveable { mutableStateOf<String?>(null) }
 
     if (selectedArtist != null) {
         val group = grouped[selectedArtist]
@@ -379,7 +381,9 @@ fun ArtistTracksScreen(
                                         model = poster,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
+                                        error = painterResource(id = R.drawable.ic_fallback_music),
+                                        placeholder = painterResource(id = R.drawable.ic_fallback_music)
                                     )
                                 } else {
                                     Text(track.title.take(1).uppercase(), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
