@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -35,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URLDecoder
+import java.text.Normalizer
 import kotlin.math.abs
 
 data class PlaybackState(
@@ -53,6 +55,85 @@ data class PlaybackState(
     val playlistName: String? = "Мои треки"
 )
 
+data class ArtistGroup(
+    val name: String,
+    val tracks: List<Track>,
+    val isPrimary: Boolean,
+    val posterUri: String?
+)
+
+// 1. Unicode-нормализация и очистка от мусора
+fun cleanArtistName(raw: String): String {
+    var clean = raw
+    try {
+        // NFKC нормализация приводит разные юникод-символы к единому виду
+        clean = Normalizer.normalize(clean, Normalizer.Form.NFKC)
+        clean = URLDecoder.decode(clean, "UTF-8")
+    } catch (_: Exception) {}
+
+    // Удаляем квадратные скобки с мусором (например, [muzmo.ru])
+    clean = clean.replace(Regex("\\[.*?\\]"), "")
+    
+    // Удаляем служебные пометки в круглых скобках
+    clean = clean.replace(Regex("(?i)\\((official|prod\\.?|remix|version|audio|video|lyrics|music|clip|cover|instrumental).*?\\)"), "")
+    
+    // Удаляем эмодзи и прочие спецсимволы (кроме букв, цифр и базовой пунктуации)
+    clean = clean.replace(Regex("[\\p{So}\\p{Cn}]"), "")
+
+    // Убираем лишние пробелы и кавычки по краям
+    return clean.replace(Regex("\\s+"), " ").trim().removeSurrounding("\"").removeSurrounding("'")
+}
+
+fun splitArtists(rawArtist: String?): List<String> {
+    if (rawArtist.isNullOrBlank() || rawArtist.equals("<unknown>", true)) return emptyList()
+    
+    // Разделяем по feat, ft, &, запятой, vs и т.д.
+    val processed = rawArtist.replace(Regex("(?i)\\s*(feat\\.?|ft\\.?|&|,|vs\\.?|x|с)\\s*"), "|")
+    
+    return processed.split("|")
+        .map { cleanArtistName(it) }
+        .filter { it.isNotBlank() && it.length > 1 && !it.equals("<unknown>", true) && !it.equals("unknown", true) }
+}
+
+// 5. Извлечение фитов из названия трека
+private val titleFeatRegex = Regex("(?i)\\(feat\\.?\\s+([^)]+)\\)")
+fun extractArtistsFromTitle(title: String): List<String> {
+    val match = titleFeatRegex.find(title)
+    return match?.groupValues?.get(1)?.let { splitArtists(it) } ?: emptyList()
+}
+
+fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
+    val result = mutableListOf<Pair<String, Boolean>>()
+    
+    // Берем из тега артиста
+    val fromMeta = splitArtists(track.artist)
+    fromMeta.forEachIndexed { index, name -> result.add(name to (index == 0)) }
+
+    // Берем фиты из названия
+    val fromTitle = extractArtistsFromTitle(track.title)
+    fromTitle.forEach { name ->
+        if (result.none { it.first.equals(name, ignoreCase = true) }) {
+            result.add(name to false) // фиты из названия всегда второстепенные
+        }
+    }
+
+    // Если ничего нет, пробуем "Artist - Title"
+    if (result.isEmpty() && track.title.contains(" - ")) {
+        val parts = track.title.split(" - ", limit = 2)
+        if (parts.size == 2) {
+            val fromTitleDash = splitArtists(parts[0])
+            fromTitleDash.forEachIndexed { index, name -> result.add(name to (index == 0)) }
+        }
+    }
+    
+    return if (result.isEmpty()) listOf("Unknown Artist" to true) else result
+}
+
+// Утилита нормализации ключа (убираем все кроме букв и цифр)
+fun normalizeArtistKey(name: String): String {
+    return name.lowercase().replace(Regex("[^a-zа-я0-9]"), "").trim()
+}
+
 fun resolveArtistKey(title: String?, artist: String?): String {
     val rawArtist = if (artist.isNullOrBlank() || artist.equals("<unknown>", true)) {
         if (!title.isNullOrBlank() && title.contains(" - ")) title.split(" - ", limit = 2)[0] else "Unknown"
@@ -67,6 +148,92 @@ fun resolveArtistKey(title: String?, artist: String?): String {
     val parts = clean.replace(Regex("(?i)\\s*(feat\\.?|ft\\.?|&|,|vs\\.?|x)\\s*"), "|").split("|")
     val main = parts.firstOrNull()?.trim() ?: ""
     return if (main.isNotBlank()) main.replaceFirstChar { it.uppercase() } else "Unknown"
+}
+
+fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<String, ArtistGroup> {
+    // 1. Начальное извлечение артистов
+    val trackToRawArtists = mutableMapOf<Track, List<Pair<String, Boolean>>>()
+    library.forEach { track -> trackToRawArtists[track] = extractArtistsWithPrimaryFlag(track) }
+
+    // 4. Эвристика по альбомам (выравниваем имена артистов внутри одного альбома)
+    val albumGroups = library.groupBy { it.album }.filter { it.key.isNotBlank() && !it.key.equals("<unknown>", true) }
+    val albumCanonicalArtist = mutableMapOf<String, String>()
+    
+    albumGroups.forEach { (album, tracks) ->
+        val artistCounts = mutableMapOf<String, Int>()
+        tracks.forEach { t ->
+            trackToRawArtists[t]?.firstOrNull()?.first?.let { raw ->
+                artistCounts[raw] = (artistCounts[raw] ?: 0) + 1
+            }
+        }
+        val bestArtist = artistCounts.maxByOrNull { it.value }?.key
+        if (bestArtist != null) albumCanonicalArtist[album] = bestArtist
+    }
+
+    val resolvedTrackToArtists = mutableMapOf<Track, List<Pair<String, Boolean>>>()
+    trackToRawArtists.forEach { (track, artists) ->
+        val albumArtist = albumCanonicalArtist[track.album]
+        if (albumArtist != null && artists.isNotEmpty()) {
+            val primary = artists.first()
+            if (primary.first != albumArtist) {
+                val updated = artists.toMutableList()
+                updated[0] = albumArtist to true
+                resolvedTrackToArtists[track] = updated
+            } else {
+                resolvedTrackToArtists[track] = artists
+            }
+        } else {
+            resolvedTrackToArtists[track] = artists
+        }
+    }
+
+    // 2. Частотный словарь имен (для выбора канонического названия)
+    val rawNameCounts = mutableMapOf<String, Int>()
+    resolvedTrackToArtists.values.forEach { list ->
+        list.forEach { (name, _) -> 
+            val cleaned = cleanArtistName(name)
+            rawNameCounts[cleaned] = (rawNameCounts[cleaned] ?: 0) + 1 
+        }
+    }
+
+    // 3. Группировка по нормализованному ключу (без учета регистра и знаков)
+    val normalizedToRawNames = mutableMapOf<String, MutableSet<String>>()
+    resolvedTrackToArtists.values.forEach { list ->
+        list.forEach { (name, _) ->
+            val cleaned = cleanArtistName(name)
+            val norm = normalizeArtistKey(cleaned)
+            if (norm.isNotBlank()) {
+                normalizedToRawNames.getOrPut(norm) { mutableSetOf() }.add(cleaned)
+            }
+        }
+    }
+
+    // 5. Выбор канонического имени (сначала по частоте, потом по длине)
+    val normToCanonical = mutableMapOf<String, String>()
+    normalizedToRawNames.forEach { (norm, rawNames) ->
+        val best = rawNames.maxWithOrNull(
+            compareBy<String> { rawNameCounts[it] ?: 0 }.thenBy { it.length }
+        ) ?: rawNames.first()
+        normToCanonical[norm] = best
+    }
+
+    // Сборка итогового списка
+    val result = mutableMapOf<String, MutableList<Pair<Track, Boolean>>>()
+    resolvedTrackToArtists.forEach { (track, artists) ->
+        artists.forEach { (rawName, isPrimary) ->
+            val cleaned = cleanArtistName(rawName)
+            val norm = normalizeArtistKey(cleaned)
+            val canonical = normToCanonical[norm] ?: cleaned
+            result.getOrPut(canonical) { mutableListOf() }.add(track to isPrimary)
+        }
+    }
+
+    return result.mapValues { (canonicalName, list) ->
+        val uniqueTracks = list.map { it.first }.distinctBy { it.id }
+        val isPrimary = list.any { it.second }
+        val posterUri = uniqueTracks.firstNotNullOfOrNull { trackPosters[it.id] }
+        ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
+    }
 }
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -105,7 +272,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         .flowOn(Dispatchers.Default)
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
-    // === НАВИГАЦИОННЫЙ СТЕЙТ (живет в ViewModel, переживает все переходы) ===
+    // КЭШИРОВАННЫЙ СПИСОК АРТИСТОВ (Считается один раз в фоне)
+    val artistGroups: StateFlow<Map<String, ArtistGroup>> = combine(library, trackPosters) { lib, posters ->
+        buildArtistsMap(lib, posters)
+    }
+    .flowOn(Dispatchers.Default)
+    .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
+    // === НАВИГАЦИОННЫЙ СТЕЙТ ===
     private val _selectedArtist = MutableStateFlow<String?>(null)
     val selectedArtist: StateFlow<String?> = _selectedArtist
     fun selectArtist(name: String?) { _selectedArtist.value = name }
