@@ -54,7 +54,6 @@ data class PlaybackState(
 )
 
 // Утилита: получаем "главного" исполнителя для ключа.
-// Если поле artist пустое/<unknown>, пытаемся вытащить из названия ("Artist - Title").
 fun resolveArtistKey(title: String?, artist: String?): String {
     val rawArtist = if (artist.isNullOrBlank() || artist.equals("<unknown>", true)) {
         if (!title.isNullOrBlank() && title.contains(" - ")) {
@@ -193,7 +192,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     currentTrackId = item?.mediaId?.toLongOrNull(),
                     title = item?.mediaMetadata?.title?.toString(),
                     artist = item?.mediaMetadata?.artist?.toString(),
-                    artUri = item?.mediaMetadata?.artworkUri?.toString(),
+                    artUri = item?.mediaMetadata?.artworkUri?.toString()?.takeIf { it.isNotBlank() },
                     durationMs = c.duration.coerceAtLeast(0),
                     repeatMode = c.repeatMode,
                     speed = c.playbackParameters.speed,
@@ -478,7 +477,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun Track.toMediaItem(fallbackArt: String? = null): MediaItem {
-        val finalArt = artUri ?: fallbackArt
+        val finalArt = if (!artUri.isNullOrBlank()) artUri else fallbackArt
         return MediaItem.Builder()
             .setMediaId(id.toString())
             .setUri(uri)
