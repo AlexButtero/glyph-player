@@ -53,7 +53,7 @@ data class PlaybackState(
 )
 
 // Утилита для получения "чистого" имени главного исполнителя
-private fun getMainArtist(rawArtist: String?): String {
+fun getMainArtist(rawArtist: String?): String {
     if (rawArtist.isNullOrBlank() || rawArtist.equals("<unknown>", true)) return "Unknown"
     var clean = rawArtist
     try { clean = URLDecoder.decode(clean, "UTF-8") } catch (_: Exception) {}
