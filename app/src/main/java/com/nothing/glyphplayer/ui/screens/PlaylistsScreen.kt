@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,20 +50,15 @@ fun PlaylistsScreen(
     onPlaylistClick: () -> Unit
 ) {
     val playlists by vm.playlists.collectAsState()
+    val selectedPlaylistId by vm.selectedPlaylistId.collectAsState()
+    
     var showCreate by remember { mutableStateOf(false) }
-    
-    // Используем rememberSaveable, чтобы сохранять открытый плейлист при переходе в плеер
-    var openedPlaylistId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val openedPlaylist = remember(playlists, openedPlaylistId) { playlists.find { it.id == openedPlaylistId } }
-    
     var playlistTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
 
     var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
     var pendingDeletePlaylist by remember { mutableStateOf<Playlist?>(null) }
-
     var playlistToEdit by remember { mutableStateOf<Playlist?>(null) }
     
-    // Для меню треков внутри плейлиста
     var showMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var trackToDelete by remember { mutableStateOf<Track?>(null) }
     var trackToRename by remember { mutableStateOf<Track?>(null) }
@@ -72,24 +66,38 @@ fun PlaylistsScreen(
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
     
-    // Мультивыбор для треков в плейлисте
     var selectedTracks by remember { mutableStateOf(listOf<Long>()) }
     
-    LaunchedEffect(openedPlaylistId) {
-        openedPlaylistId?.let { pId ->
+    LaunchedEffect(selectedPlaylistId) {
+        selectedPlaylistId?.let { pId ->
             vm.getPlaylistTracks(pId) { tracks -> playlistTracks = tracks }
         }
     }
 
-    if (openedPlaylist != null) {
+    // Логика: если открыт плейлист — показываем его. Стейт живет в ViewModel.
+    if (selectedPlaylistId != null) {
+        val openedPlaylist = playlists.find { it.id == selectedPlaylistId }
+        if (openedPlaylist == null && playlists.isNotEmpty()) {
+            // Плейлист удален — сбрасываем
+            vm.selectPlaylist(null)
+            return
+        }
+        if (openedPlaylist == null) {
+            // Еще грузится
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Red)
+            }
+            return
+        }
+
         var dragOffsetX by remember { mutableStateOf(0f) }
         Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-            detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) openedPlaylistId = null; dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
+            detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) vm.selectPlaylist(null); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
         }) {
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().padding(16.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                        IconButton(onClick = { openedPlaylistId = null }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
+                        IconButton(onClick = { vm.selectPlaylist(null) }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
                     }
                     
                     Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -235,7 +243,7 @@ fun PlaylistsScreen(
                                 }
                             }
                         ) {
-                            Row(Modifier.fillMaxWidth().background(Color.Black).clickable { openedPlaylistId = p.id }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().background(Color.Black).clickable { vm.selectPlaylist(p.id) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface), contentAlignment = Alignment.Center) {
                                     if (p.posterUri != null) AsyncImage(model = p.posterUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                     else Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Gray)
@@ -264,7 +272,6 @@ fun PlaylistsScreen(
         }
     }
 
-    // ДИАЛОГИ
     if (showAddToPlaylistDialog && trackForPlaylist != null) {
         AlertDialog(
             onDismissRequest = { showAddToPlaylistDialog = false; trackForPlaylist = null }, title = { Text(stringResource(R.string.playlists_add_to), color = Color.White) },
