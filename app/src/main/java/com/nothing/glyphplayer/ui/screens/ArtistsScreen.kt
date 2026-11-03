@@ -17,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,7 +63,6 @@ fun splitArtistsWithPrimary(rawArtist: String?): List<Pair<String, Boolean>> {
 fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
     val fromMeta = splitArtistsWithPrimary(track.artist)
     if (fromMeta.isNotEmpty()) return fromMeta
-
     if (track.title.contains(" - ")) {
         val parts = track.title.split(" - ", limit = 2)
         if (parts.size == 2) {
@@ -75,9 +73,7 @@ fun extractArtistsWithPrimaryFlag(track: Track): List<Pair<String, Boolean>> {
     return listOf("Unknown Artist" to true)
 }
 
-fun normalizeForGrouping(name: String): String {
-    return NON_ALNUM_REGEX.replace(name.lowercase(), "").trim()
-}
+fun normalizeForGrouping(name: String): String = NON_ALNUM_REGEX.replace(name.lowercase(), "").trim()
 
 fun isSimilarArtist(a: String, b: String): Boolean {
     if (a == b) return true
@@ -115,7 +111,6 @@ fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<
         if (current in processed) continue
         val group = mutableListOf(current)
         processed.add(current)
-
         for (j in i + 1 until sortedArtists.size) {
             val other = sortedArtists[j]
             if (other in processed) continue
@@ -124,7 +119,6 @@ fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<
                 processed.add(other)
             }
         }
-
         val bestName = group.maxByOrNull { it.length } ?: current
         val capitalizedName = bestName.replaceFirstChar { it.uppercase() }
         group.forEach { canonicalMap[it] = capitalizedName }
@@ -141,7 +135,6 @@ fun buildArtistsMap(library: List<Track>, trackPosters: Map<Long, String>): Map<
     return result.mapValues { (canonicalName, list) ->
         val uniqueTracks = list.map { it.first }.distinctBy { it.id }
         val isPrimary = list.any { it.second }
-        // Ищем первый попавшийся валидный постер среди треков артиста
         val posterUri = uniqueTracks.firstNotNullOfOrNull { trackPosters[it.id] }
         ArtistGroup(canonicalName, uniqueTracks, isPrimary, posterUri)
     }
@@ -155,6 +148,8 @@ fun ArtistsScreen(
     onTrackClick: () -> Unit
 ) {
     val lib by vm.library.collectAsState()
+    val selectedArtist by vm.selectedArtist.collectAsState()
+    
     var searchQuery by remember { mutableStateOf("") }
     var grouped by remember { mutableStateOf<Map<String, ArtistGroup>>(emptyMap()) }
     var isCalculating by remember { mutableStateOf(false) }
@@ -176,35 +171,41 @@ fun ArtistsScreen(
 
     val displayedArtists = remember(grouped, searchQuery) {
         val query = searchQuery.trim().lowercase()
-        val filtered = if (query.isEmpty()) {
-            grouped.values.filter { it.isPrimary }
-        } else {
-            grouped.values.filter { it.name.lowercase().contains(query) }
-        }
+        val filtered = if (query.isEmpty()) grouped.values.filter { it.isPrimary }
+                       else grouped.values.filter { it.name.lowercase().contains(query) }
         filtered.sortedByDescending { it.tracks.size }.map { it.name }
     }
 
-    // Используем rememberSaveable для сохранения стейта при переходе в плеер
-    var selectedArtist by rememberSaveable { mutableStateOf<String?>(null) }
-
+    // Логика обработки выбранного артиста — стейт живет в ViewModel
     if (selectedArtist != null) {
         val group = grouped[selectedArtist]
-        if (group != null) {
-            ArtistTracksScreen(
-                artistName = group.name, 
-                tracks = group.tracks, 
-                trackPosters = trackPosters,
-                onBack = { selectedArtist = null }, 
-                vm = vm, 
-                onTrackClick = onTrackClick
-            )
-        } else if (isCalculating) {
-            // Если список еще генерируется, показываем загрузку, а не выкидываем обратно
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Red)
+        when {
+            group != null -> {
+                ArtistTracksScreen(
+                    artistName = group.name, 
+                    tracks = group.tracks, 
+                    trackPosters = trackPosters,
+                    onBack = { vm.selectArtist(null) }, 
+                    vm = vm, 
+                    onTrackClick = onTrackClick
+                )
             }
-        } else {
-            selectedArtist = null
+            lib.isNotEmpty() && grouped.isEmpty() -> {
+                // Библиотека загружена, но группировка еще не закончена
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Red)
+                }
+            }
+            lib.isEmpty() -> {
+                // Библиотека еще не загружена
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Red)
+                }
+            }
+            else -> {
+                // Артист реально не найден — сбрасываем
+                vm.selectArtist(null)
+            }
         }
         return
     }
@@ -252,7 +253,7 @@ fun ArtistsScreen(
                         val posterUri = group?.posterUri
                         
                         Row(
-                            Modifier.fillMaxWidth().clickable { selectedArtist = artistName }.padding(vertical = 8.dp),
+                            Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
