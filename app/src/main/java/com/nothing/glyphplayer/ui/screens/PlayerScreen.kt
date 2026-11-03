@@ -54,7 +54,6 @@ import com.nothing.glyphplayer.playback.EqualizerManager
 import com.nothing.glyphplayer.playback.LyricLine
 import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.ui.PlayerViewModel
-import com.nothing.glyphplayer.ui.getMainArtist
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -63,7 +62,7 @@ import kotlin.math.roundToInt
 @Composable
 fun PlayerScreen(
     vm: PlayerViewModel = viewModel(), 
-    artistPosters: Map<String, String>,
+    trackPosters: Map<Long, String>,
     onBack: () -> Unit
 ) {
     val state by vm.state.collectAsState()
@@ -115,12 +114,13 @@ fun PlayerScreen(
         QueueScreen(state.queue, state.currentIndex, onBack = { showQueue = false }, onSelect = { vm.seekToIndex(it); showQueue = false }); return 
     }
 
-    val currentArtistPoster = artistPosters[getMainArtist(state.artist)]
+    val currentArtistPoster = state.currentTrackId?.let { trackPosters[it] }
+    val currentPoster = state.artUri ?: currentArtistPoster
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // РАЗМЫТЫЙ ФОН
         AsyncImage(
-            model = state.artUri ?: currentArtistPoster,
+            model = currentPoster,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.4f }
@@ -232,7 +232,9 @@ fun PlayerScreen(
             ) {
                 val prevIndex = state.currentIndex - 1
                 if (prevIndex >= 0 && prevIndex < state.queue.size) {
-                    val prevArt = state.queue[prevIndex].mediaMetadata.artworkUri
+                    val prevItem = state.queue[prevIndex]
+                    val prevArt = prevItem.mediaMetadata.artworkUri 
+                        ?: trackPosters[prevItem.mediaId.toLongOrNull()]
                     if (prevArt != null) {
                         AsyncImage(
                             model = prevArt,
@@ -247,7 +249,9 @@ fun PlayerScreen(
                 
                 val nextIndex = state.currentIndex + 1
                 if (nextIndex >= 0 && nextIndex < state.queue.size) {
-                    val nextArt = state.queue[nextIndex].mediaMetadata.artworkUri
+                    val nextItem = state.queue[nextIndex]
+                    val nextArt = nextItem.mediaMetadata.artworkUri 
+                        ?: trackPosters[nextItem.mediaId.toLongOrNull()]
                     if (nextArt != null) {
                         AsyncImage(
                             model = nextArt,
@@ -261,7 +265,7 @@ fun PlayerScreen(
                 }
                 
                 AsyncImage(
-                    model = state.artUri ?: currentArtistPoster,
+                    model = currentPoster,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -403,7 +407,7 @@ fun PlayerScreen(
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (УЛЬТРА-ПЛАВНЫЙ СКРОЛЛ)
+// ЭКРАН КАРАОКЕ
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, onBack: () -> Unit) {
@@ -462,7 +466,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
         }
     }
 
-    // Плавный скролл к центру
     LaunchedEffect(activeIndex, isUserScrolling) {
         if (activeIndex in displayLyrics.indices && !isEditing && !isUserScrolling) {
             listState.animateScrollToItem(activeIndex)
@@ -535,7 +538,6 @@ fun KaraokeLyricsScreen(vm: PlayerViewModel, trackId: Long?, currentPos: Long, o
                                 .padding(vertical = 12.dp, horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Подложка для стабильности
                             Text(
                                 text = line.text,
                                 color = Color.Transparent,
