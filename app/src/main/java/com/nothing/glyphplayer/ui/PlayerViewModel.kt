@@ -242,7 +242,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _lyrics = MutableStateFlow<List<LyricLine>>(emptyList())
     val lyrics: StateFlow<List<LyricLine>> = _lyrics
 
-    private val _lyricsOffsetMs = MutableStateFlow(prefs.getLong("lyrics_offset", 0L))
+    private val _lyricsOffsetMs = MutableStateFlow(0L)
     val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs
 
     private val _isWhiteLyrics = MutableStateFlow(prefs.getBoolean("is_white_lyrics", false))
@@ -327,6 +327,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val newId = _state.value.currentTrackId
             if (newId != null && newId != currentLyricsTrackId) {
                 currentLyricsTrackId = newId
+                
+                // ЗАГРУЗКА ЗАДЕРЖКИ ДЛЯ КОНКРЕТНОГО ТРЕКА
+                _lyricsOffsetMs.value = prefs.getLong("lyrics_offset_$newId", 0L)
+                
                 val uri = library.value.find { it.id == newId }?.uri
                 if (uri != null) {
                     scope.launch { _lyrics.value = LyricsLoader.load(context, uri) }
@@ -359,7 +363,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setLyricsOffset(offsetMs: Long) {
         _lyricsOffsetMs.value = offsetMs
-        prefs.edit().putLong("lyrics_offset", offsetMs).apply()
+        val currentId = _state.value.currentTrackId
+        if (currentId != null) {
+            prefs.edit().putLong("lyrics_offset_$currentId", offsetMs).apply()
+        }
     }
 
     fun toggleLyricsColor() {
