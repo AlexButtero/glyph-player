@@ -417,7 +417,7 @@ fun PlayerScreen(
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ЛАКОНИЧНЫЙ ДИЗАЙН)
+// ЭКРАН КАРАОКЕ (ОПТИМАЛЬНАЯ ПАНЕЛЬ НАСТРОЕК)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(
@@ -618,48 +618,68 @@ fun KaraokeLyricsScreen(
             }
         }
 
-        // КОМПАКТНАЯ ПАНЕЛЬ НАСТРОЕК
+        // ПАНЕЛЬ НАСТРОЕК (ОПТИМАЛЬНЫЙ РАЗМЕР)
         AnimatedVisibility(
             visible = showOffsetControls && !isEditing,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp, start = 16.dp, end = 16.dp)
         ) {
-            Surface(
-                color = Color(0xFF1E1E1E).copy(alpha = 0.95f),
-                shape = RoundedCornerShape(24.dp),
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Цвет
+                Column(Modifier.padding(16.dp)) {
+                    
+                    // Цвет текста
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { vm.toggleLyricsColor() }
+                        Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier.size(16.dp).background(if (isWhiteLyrics) Color.White else Red, CircleShape)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Цвет", color = Color.Gray, fontSize = 12.sp)
+                        Text("Цвет текста", color = Color.White, fontSize = 14.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Красный", color = if (!isWhiteLyrics) Red else Color.Gray, fontSize = 12.sp)
+                            Switch(
+                                checked = isWhiteLyrics,
+                                onCheckedChange = { vm.toggleLyricsColor() },
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                                colors = SwitchDefaults.colors(checkedTrackColor = Red, uncheckedTrackColor = Color.DarkGray)
+                            )
+                            Text("Белый", color = if (isWhiteLyrics) Color.White else Color.Gray, fontSize = 12.sp)
+                        }
                     }
 
-                    // Задержка
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { vm.setLyricsOffset(offsetMs - 100) }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Default.Remove, contentDescription = "-0.1", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                    // Задержка текста
+                    Text(
+                        text = "Задержка: ${String.format("%.1f", offsetMs / 1000f)} сек",
+                        color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { vm.setLyricsOffset(offsetMs - 100) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text("-0.1s", color = Color.White, fontSize = 14.sp)
                         }
-                        Text(
-                            text = String.format("%.1f сек", offsetMs / 1000f),
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(56.dp),
-                            textAlign = TextAlign.Center
+                        Slider(
+                            value = offsetMs.toFloat(),
+                            onValueChange = { vm.setLyricsOffset(it.toLong()) },
+                            valueRange = -2000f..2000f,
+                            colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
+                            modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
                         )
-                        IconButton(onClick = { vm.setLyricsOffset(offsetMs + 100) }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Default.Add, contentDescription = "+0.1", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                        Button(
+                            onClick = { vm.setLyricsOffset(offsetMs + 100) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text("+0.1s", color = Color.White, fontSize = 14.sp)
                         }
                     }
                 }
