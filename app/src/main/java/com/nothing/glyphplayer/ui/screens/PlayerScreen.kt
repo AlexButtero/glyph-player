@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -416,7 +417,7 @@ fun PlayerScreen(
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ФИКСИРОВАННЫЙ МАКЕТ БЕЗ ПРЫЖКОВ ПЕРЕНОСА)
+// ЭКРАН КАРАОКЕ (ЛАКОНИЧНЫЙ ДИЗАЙН)
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(
@@ -533,7 +534,6 @@ fun KaraokeLyricsScreen(
                     itemsIndexed(displayLyrics) { index, line ->
                         val isActive = index == activeIndex
                         
-                        // Анимируем масштаб (от 1f к 0.75f) и прозрачность, а размер шрифта остается строго 22sp
                         val animatedScale by animateFloatAsState(
                             targetValue = if (isActive) 1f else 0.75f,
                             animationSpec = tween(300),
@@ -559,7 +559,6 @@ fun KaraokeLyricsScreen(
                             Text(
                                 text = line.text,
                                 color = animatedColor,
-                                // Жёстко фиксируем размер и жирность, чтобы макет СРАЗУ рассчитал переносы для максимального размера
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 22.sp,
                                 lineHeight = 28.sp,
@@ -619,52 +618,48 @@ fun KaraokeLyricsScreen(
             }
         }
 
+        // КОМПАКТНАЯ ПАНЕЛЬ НАСТРОЕК
         AnimatedVisibility(
             visible = showOffsetControls && !isEditing,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp, start = 16.dp, end = 16.dp)
         ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
-                shape = RoundedCornerShape(12.dp),
+            Surface(
+                color = Color(0xFF1E1E1E).copy(alpha = 0.95f),
+                shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Цвет
                     Row(
-                        Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { vm.toggleLyricsColor() }
                     ) {
-                        Text("Цвет текста:", color = Color.White, fontSize = 14.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Красный", color = Color.Gray, fontSize = 12.sp)
-                            Switch(
-                                checked = isWhiteLyrics,
-                                onCheckedChange = { vm.toggleLyricsColor() },
-                                colors = SwitchDefaults.colors(checkedTrackColor = Red, uncheckedTrackColor = Color.DarkGray)
-                            )
-                            Text("Белый", color = Color.White, fontSize = 12.sp)
-                        }
+                        Box(
+                            Modifier.size(16.dp).background(if (isWhiteLyrics) Color.White else Red, CircleShape)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Цвет", color = Color.Gray, fontSize = 12.sp)
                     }
 
-                    Text(
-                        text = "Задержка текста: ${String.format("%.1f", offsetMs / 1000f)} сек",
-                        color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = { vm.setLyricsOffset(offsetMs - 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                            Text("-0.1s", color = Color.White)
+                    // Задержка
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { vm.setLyricsOffset(offsetMs - 100) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Remove, contentDescription = "-0.1", tint = Color.LightGray, modifier = Modifier.size(16.dp))
                         }
-                        Slider(
-                            value = offsetMs.toFloat(),
-                            onValueChange = { vm.setLyricsOffset(it.toLong()) },
-                            valueRange = -2000f..2000f,
-                            colors = SliderDefaults.colors(thumbColor = Red, activeTrackColor = Red),
-                            modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
+                        Text(
+                            text = String.format("%.1f сек", offsetMs / 1000f),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(56.dp),
+                            textAlign = TextAlign.Center
                         )
-                        Button(onClick = { vm.setLyricsOffset(offsetMs + 100) }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                            Text("+0.1s", color = Color.White)
+                        IconButton(onClick = { vm.setLyricsOffset(offsetMs + 100) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = "+0.1", tint = Color.LightGray, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
