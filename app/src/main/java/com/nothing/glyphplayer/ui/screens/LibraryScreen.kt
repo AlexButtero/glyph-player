@@ -24,6 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
@@ -55,6 +58,7 @@ fun LibraryScreen(
     val state by vm.state.collectAsState()
     val playlists by vm.playlists.collectAsState()
     val isScanning by vm.isScanning.collectAsState()
+    val context = LocalContext.current
     
     LaunchedEffect(Unit) { if (lib.isEmpty()) vm.scanLibrary { } }
 
@@ -83,7 +87,7 @@ fun LibraryScreen(
         vm.libraryRefreshEvent.collect {
             val wasAtTop = !listState.canScrollBackward
             if (!wasAtTop) {
-                listState.animateScrollToItem(0)
+                listState.scrollToItem(0)
             } else {
                 isRefreshing = true
                 search = ""
@@ -122,7 +126,7 @@ fun LibraryScreen(
                 search = ""
                 vm.scanLibrary { 
                     isRefreshing = false 
-                    scope.launch { listState.animateScrollToItem(0) }
+                    scope.launch { listState.scrollToItem(0) }
                 }
             },
             state = pullToRefreshState,
@@ -222,6 +226,7 @@ fun LibraryScreen(
                         ) { idx, track ->
                             val isSelected = selectedTracks.contains(track.id)
                             TrackRow(
+                                context = context,
                                 track = track,
                                 posterUri = trackPosters[track.id],
                                 isSelected = isSelected,
@@ -233,9 +238,7 @@ fun LibraryScreen(
                                         selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
                                     }
                                 },
-                                onLongClick = {
-                                    if (!isSelected) selectedTracks = selectedTracks + track.id
-                                },
+                                onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id },
                                 onMenuClick = { showMenuForTrack = track },
                                 showMenu = showMenuForTrack?.id == track.id,
                                 onMenuDismiss = { showMenuForTrack = null },
@@ -330,9 +333,9 @@ fun LibraryScreen(
     }
 }
 
-// === ОПТИМИЗИРОВАННАЯ СТРОКА ТРЕКА ===
 @Composable
 private fun TrackRow(
+    context: android.content.Context,
     track: Track,
     posterUri: String?,
     isSelected: Boolean,
@@ -357,6 +360,15 @@ private fun TrackRow(
                     onLongPress = { onLongClick() }
                 )
             }
+            .drawBehind {
+                val y = size.height - 1f
+                drawLine(
+                    color = Color(0xFF444444).copy(alpha = 0.3f),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1f
+                )
+            }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -365,7 +377,10 @@ private fun TrackRow(
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = posterUri,
+                model = ImageRequest.Builder(context)
+                    .data(posterUri)
+                    .crossfade(false)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -391,7 +406,6 @@ private fun TrackRow(
                 ) {
                     Text("⋮", color = Color.Gray, style = MaterialTheme.typography.titleLarge)
                 }
-                // Меню создаётся ТОЛЬКО когда открыто — главная оптимизация
                 if (showMenu) {
                     DropdownMenu(
                         expanded = true,
@@ -408,7 +422,6 @@ private fun TrackRow(
             }
         }
     }
-    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
 }
 
 @Composable
