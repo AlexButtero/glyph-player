@@ -3,10 +3,14 @@ package com.nothing.glyphplayer.data
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.provider.MediaStore
+import com.nothing.glyphplayer.playback.LyricLine
+import com.nothing.glyphplayer.playback.LyricsLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MusicRepository(
     private val db: AppDatabase,
@@ -16,23 +20,52 @@ class MusicRepository(
     val tracks: Flow<List<Track>> = db.tracks().observeAll()
     val playlists: Flow<List<Playlist>> = db.playlists().observeAll()
 
-    suspend fun scanLibrary(): Int {
+    // Папка приложения — с проверкой старых имен
+    val appFolder: File by lazy {
+        val base = File(Environment.getExternalStorageDirectory(), "Music")
+        if (!base.exists()) base.mkdirs()
+        val candidates = listOf("GlyphPlayer", "Glyph Player", "Nothing Player")
+        candidates.map { File(base, it) }.firstOrNull { it.exists() }
+            ?: File(base, "GlyphPlayer").apply { mkdirs() }
+    }
+
+    val lyricsFallbackFolder: File by lazy {
+        File(appFolder, "lyrics").apply { mkdirs() }
+    }
+
+    suspend fun scanLibrary(): Int = withContext(Dispatchers.IO) {
         val found = scanner.scan()
         val existing = db.tracks().all().associateBy { it.id }
+
+        // Счетчик для новых треков (чтобы у каждого была уникальная дата добавления)
+        var timestamp = System.currentTimeMillis()
+
         val merged = found.map { newTrack ->
             val oldTrack = existing[newTrack.id]
-            if (oldTrack != null && oldTrack.title != newTrack.title) {
-                newTrack.copy(title = oldTrack.title)
-            } else {
-                newTrack
+            when {
+                oldTrack != null -> {
+                    // Существующий трек: сохраняем переименование и дату первого появления в библиотеке
+                    val preservedDate = if (oldTrack.dateAdded > 0) oldTrack.dateAdded else (timestamp++)
+                    newTrack.copy(
+                        title = if (oldTrack.title != newTrack.title) oldTrack.title else newTrack.title,
+                        dateAdded = preservedDate
+                    )
+                }
+                newTrack.dateAdded > 0 -> newTrack
+                else -> {
+                    // Нет даты от MediaStore — ставим дату добавления в библиотеку
+                    timestamp += 1000L
+                    newTrack.copy(dateAdded = timestamp)
+                }
             }
         }
+
         val foundIds = merged.map { it.id }.toSet()
         existing.keys.forEach { id ->
             if (id !in foundIds) db.tracks().deleteById(id)
         }
         db.tracks().upsert(merged)
-        return merged.size
+        merged.size
     }
 
     suspend fun deleteTrack(track: Track) {
@@ -67,7 +100,6 @@ class MusicRepository(
         db.tracks().updateTitle(track.id, newTitle)
     }
 
-    // ОБНОВЛЕНО: Принимает описание и постер
     suspend fun createPlaylist(name: String, desc: String?, poster: String?): Long =
         db.playlists().insert(Playlist(name = name, description = desc, posterUri = poster))
 
@@ -86,6 +118,66 @@ class MusicRepository(
     }
 
     suspend fun tracksOf(playlistId: Long): List<Track> = db.playlists().tracksOf(playlistId)
+
+    suspend fun getSourceFolders(): Map<String, Int> = scanner.getSourceFolders()
+
+    // === ЛИРИКА ===
+
     suspend fun getLyrics(trackId: Long): String? = db.lyrics().getLyrics(trackId)
-    suspend fun saveLyrics(trackId: Long, text: String) = db.lyrics().saveLyrics(LyricsEntity(trackId, text))
+
+    suspend fun saveLyrics(trackId: Long, text: String) {
+        db.lyrics().saveLyrics(LyricsEntity(trackId, text))
+    }
+
+    // Загрузка .lrc текста (файл рядом с аудио → файл в папке app → null)
+    suspend fun loadLrcText(trackId: Long, trackUri: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val audioPath = scanner.getTrackPath(trackUri)
+            if (audioPath != null) {
+                val audioFile = File(audioPath)
+                val lrcFile = File(audioFile.parentFile, audioFile.nameWithoutExtension + ".lrc")
+                if (lrcFile.exists() && lrcFile.length() > 0) {
+                    return@withContext lrcFile.readText()
+                }
+            }
+            val fallbackFile = File(lyricsFallbackFolder, "$trackId.lrc")
+            if (fallbackFile.exists() && fallbackFile.length() > 0) {
+                return@withContext fallbackFile.readText()
+            }
+            null
+        } catch (_: Exception) { null }
+    }
+
+    // Парсинг .lrc (для караоке-режима)
+    suspend fun loadLrcLines(trackId: Long, trackUri: String): List<LyricLine> {
+        val text = loadLrcText(trackId, trackUri) ?: return emptyList()
+        return LyricsLoader.parse(text)
+    }
+
+    // Сохранение .lrc (файл рядом с аудио → резервная папка)
+    suspend fun saveLrc(track: Track, text: String) = withContext(Dispatchers.IO) {
+        try {
+            val audioPath = scanner.getTrackPath(track.uri)
+            if (audioPath != null) {
+                val audioFile = File(audioPath)
+                val lrcFile = File(audioFile.parentFile, audioFile.nameWithoutExtension + ".lrc")
+                try {
+                    if (text.isBlank()) {
+                        if (lrcFile.exists()) lrcFile.delete()
+                    } else {
+                        lrcFile.writeText(text)
+                    }
+                    return@withContext
+                } catch (_: Exception) {
+                    // Права или read-only — падаем в резерв
+                }
+            }
+            val fallbackFile = File(lyricsFallbackFolder, "${track.id}.lrc")
+            if (text.isBlank()) {
+                if (fallbackFile.exists()) fallbackFile.delete()
+            } else {
+                fallbackFile.writeText(text)
+            }
+        } catch (_: Exception) { }
+    }
 }
