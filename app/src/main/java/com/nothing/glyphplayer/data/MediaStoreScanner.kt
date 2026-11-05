@@ -8,7 +8,7 @@ import kotlinx.coroutines.withContext
 
 class MediaStoreScanner(private val ctx: Context) {
 
-    suspend fun scan(): List<Track> = withContext(Dispatchers.IO) {
+    suspend fun scan(knownValidAlbums: Set<Long> = emptySet()): List<Track> = withContext(Dispatchers.IO) {
         val proj = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
@@ -19,10 +19,24 @@ class MediaStoreScanner(private val ctx: Context) {
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.DATE_MODIFIED
         )
-        val out = mutableListOf<Track>()
+
+        data class RawTrack(
+            val id: Long,
+            val albumId: Long,
+            val title: String,
+            val artist: String,
+            val album: String,
+            val durationMs: Long,
+            val dateAdd: Long,
+            val dateMod: Long
+        )
+
+        val raw = mutableListOf<RawTrack>()
+
         ctx.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj,
-            "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, "${MediaStore.Audio.Media.TITLE} ASC"
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0", null,
+            "${MediaStore.Audio.Media.TITLE} ASC"
         )?.use { c ->
             val idI = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val tI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -34,40 +48,53 @@ class MediaStoreScanner(private val ctx: Context) {
             val dModI = c.getColumnIndex(MediaStore.Audio.Media.DATE_MODIFIED)
 
             while (c.moveToNext()) {
-                val id = c.getLong(idI)
-                val albumId = c.getLong(alIdI)
-                val dateAdd = c.getLong(dAddI)
-                val dateMod = if (dModI != -1) c.getLong(dModI) else 0L
-
-                // Приоритет: DATE_ADDED → DATE_MODIFIED → 0 (обработается в репозитории)
-                val effectiveDate = when {
-                    dateAdd > 0 -> dateAdd
-                    dateMod > 0 -> dateMod
-                    else -> 0L
-                }
-
-                val artUri = if (albumId > 0) {
-                    val candidate = "content://media/external/audio/albumart/$albumId"
-                    try {
-                        ctx.contentResolver.openFileDescriptor(Uri.parse(candidate), "r")?.use { fd ->
-                            if (fd.fileDescriptor.valid()) candidate else null
-                        }
-                    } catch (_: Exception) { null }
-                } else null
-
-                out += Track(
-                    id = id,
+                raw += RawTrack(
+                    id = c.getLong(idI),
+                    albumId = c.getLong(alIdI),
                     title = c.getString(tI) ?: "Unknown",
                     artist = c.getString(aI) ?: "Unknown",
                     album = c.getString(alI) ?: "Unknown",
                     durationMs = c.getLong(dI),
-                    uri = "content://media/external/audio/media/$id",
-                    artUri = artUri,
-                    dateAdded = effectiveDate * 1000L
+                    dateAdd = c.getLong(dAddI),
+                    dateMod = if (dModI != -1) c.getLong(dModI) else 0L
                 )
             }
         }
-        out
+
+        // Валидируем только новые альбомы (пропускаем уже проверенные ранее)
+        val uniqueAlbumIds = raw.map { it.albumId }.filter { it > 0 }.toSet()
+        val validAlbums = mutableSetOf<Long>()
+
+        for (albumId in uniqueAlbumIds) {
+            if (albumId in knownValidAlbums) {
+                validAlbums.add(albumId)
+                continue
+            }
+            val candidate = "content://media/external/audio/albumart/$albumId"
+            try {
+                ctx.contentResolver.openFileDescriptor(Uri.parse(candidate), "r")?.use { fd ->
+                    if (fd.fileDescriptor.valid()) validAlbums.add(albumId)
+                }
+            } catch (_: Exception) { }
+        }
+
+        raw.map { r ->
+            val effectiveDate = when {
+                r.dateAdd > 0 -> r.dateAdd
+                r.dateMod > 0 -> r.dateMod
+                else -> 0L
+            }
+            Track(
+                id = r.id,
+                title = r.title,
+                artist = r.artist,
+                album = r.album,
+                durationMs = r.durationMs,
+                uri = "content://media/external/audio/media/${r.id}",
+                artUri = if (r.albumId in validAlbums) "content://media/external/audio/albumart/${r.albumId}" else null,
+                dateAdded = effectiveDate * 1000L
+            )
+        }
     }
 
     suspend fun getTrackPath(uriString: String): String? = withContext(Dispatchers.IO) {
