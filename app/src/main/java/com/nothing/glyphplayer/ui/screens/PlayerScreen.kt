@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -112,19 +111,11 @@ fun PlayerScreen(
         KaraokeLyricsScreen(vm, state.currentTrackId, effectivePosition, isWhiteLyrics, onBack = { showLyrics = false }); return 
     }
     if (showQueue) { 
-        val uiIndex = state.displayQueue.indexOfFirst { it.mediaId == state.currentTrackId?.toString() }.coerceAtLeast(0)
         QueueScreen(
-            queue = state.displayQueue,
-            currentIndex = uiIndex,
+            queue = state.queue,
+            currentIndex = state.currentIndex,
             onBack = { showQueue = false },
-            onSelect = { displayIndex ->
-                val item = state.displayQueue.getOrNull(displayIndex)
-                if (item != null) {
-                    val originalIndex = state.queue.indexOfFirst { it.mediaId == item.mediaId }
-                    if (originalIndex != -1) vm.seekToIndex(originalIndex)
-                }
-                showQueue = false
-            }
+            onSelect = { realIndex -> vm.seekToIndex(realIndex); showQueue = false }
         ); return 
     }
 
@@ -202,18 +193,24 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                         .clickable { showLyrics = true },
                     contentAlignment = Alignment.Center
                 ) {
+                    val text = currentLine?.text ?: ""
+                    val fontSize = when {
+                        text.length > 60 -> 18.sp
+                        text.length > 40 -> 22.sp
+                        else -> 30.sp
+                    }
                     Text(
-                        text = currentLine?.text ?: "",
+                        text = text,
                         color = if (isWhiteLyrics) Color.White else Red,
-                        fontSize = 30.sp,
+                        fontSize = fontSize,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee()
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -417,7 +414,7 @@ fun PlayerScreen(
 }
 
 // ============================================================================
-// ЭКРАН КАРАОКЕ (ОПТИМАЛЬНАЯ ПАНЕЛЬ НАСТРОЕК)
+// ЭКРАН КАРАОКЕ
 // ============================================================================
 @Composable
 fun KaraokeLyricsScreen(
@@ -618,7 +615,6 @@ fun KaraokeLyricsScreen(
             }
         }
 
-        // ПАНЕЛЬ НАСТРОЕК (ОПТИМАЛЬНЫЙ РАЗМЕР)
         AnimatedVisibility(
             visible = showOffsetControls && !isEditing,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp, start = 16.dp, end = 16.dp)
@@ -629,8 +625,6 @@ fun KaraokeLyricsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    
-                    // Цвет текста
                     Row(
                         Modifier.fillMaxWidth().padding(bottom = 16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -649,7 +643,6 @@ fun KaraokeLyricsScreen(
                         }
                     }
 
-                    // Задержка текста
                     Text(
                         text = "Задержка: ${String.format("%.1f", offsetMs / 1000f)} сек",
                         color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
@@ -701,6 +694,9 @@ fun KaraokeLyricsScreen(
 @Composable
 fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
     var dragOffsetX by remember { mutableStateOf(0f) }
+    // Инициализируем список на текущем треке. Пользователь может скроллить вверх и вниз.
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
+    
     Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
         detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
     }) {
@@ -708,21 +704,12 @@ fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, o
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) } }
             Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
-            
-            val displayQueue = remember(queue, currentIndex) {
-                if (queue.isNotEmpty() && currentIndex in queue.indices) {
-                    val firstPart = queue.subList(currentIndex, queue.size).toList()
-                    val secondPart = queue.subList(0, currentIndex).toList()
-                    firstPart + secondPart
-                } else queue
-            }
 
-            LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(displayQueue) { uiIndex, item ->
-                    val realIndex = if (queue.isNotEmpty()) (currentIndex.coerceAtLeast(0) + uiIndex) % queue.size else 0
-                    val isCurrent = uiIndex == 0 
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(queue) { index, item ->
+                    val isCurrent = index == currentIndex 
 
-                    Row(Modifier.fillMaxWidth().clickable { onSelect(realIndex) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable { onSelect(index) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(item.mediaMetadata.title?.toString() ?: "Unknown", color = if (isCurrent) Red else Color.White, style = MaterialTheme.typography.bodyMedium)
                             Text(item.mediaMetadata.artist?.toString() ?: "", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
