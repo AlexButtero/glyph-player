@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,8 +33,9 @@ import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistsScreen(
     vm: PlayerViewModel = viewModel(), 
@@ -45,9 +48,12 @@ fun ArtistsScreen(
     
     var searchQuery by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
+    
+    val pullToRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-    // Слушаем событие двойного тапа по вкладке Исполнители
+    // Бонус: двойной тап по иконке «Исполнители»
     LaunchedEffect(Unit) {
         vm.artistsRefreshEvent.collect {
             val wasAtTop = !listState.canScrollBackward
@@ -87,72 +93,84 @@ fun ArtistsScreen(
         return
     }
 
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-        stickyHeader {
-            Column(Modifier.fillMaxWidth().background(Color.Black).padding(16.dp)) {
-                Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-                Spacer(Modifier.height(16.dp))
-                
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Red,
-                        unfocusedBorderColor = Color.DarkGray,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            searchQuery = ""
+            vm.scanLibrary { 
+                isRefreshing = false 
+                scope.launch { listState.animateScrollToItem(0) }
             }
-        }
+        },
+        state = pullToRefreshState,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            // ================ ШАПКА (фиксированная) ================
+            Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+            Spacer(Modifier.height(16.dp))
+            
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Red,
+                    unfocusedBorderColor = Color.DarkGray,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            )
 
-        if (isRefreshing) {
-            item {
+            // ================ СПИСОК ================
+            if (isRefreshing) {
                 Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Red)
                 }
-            }
-        } else {
-            items(displayedArtists, key = { it }) { artistName ->
-                val group = grouped[artistName]
-                val trackCount = group?.tracks?.size ?: 0
-                val posterUri = group?.posterUri
-                
-                Row(
-                    Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(Color(0xFF222222)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (posterUri != null) {
-                            AsyncImage(
-                                model = posterUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Text(
-                                text = artistName.take(1).uppercase(),
-                                color = Color.Gray,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+            } else {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    items(displayedArtists, key = { it }) { artistName ->
+                        val group = grouped[artistName]
+                        val trackCount = group?.tracks?.size ?: 0
+                        val posterUri = group?.posterUri
+                        
+                        Row(
+                            Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(Color(0xFF222222)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (posterUri != null) {
+                                    AsyncImage(
+                                        model = posterUri,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = artistName.take(1).uppercase(),
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                         }
+                        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 }
-                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f), modifier = Modifier.padding(horizontal = 16.dp))
             }
         }
     }
