@@ -92,63 +92,65 @@ fun ArtistsScreen(
         state = pullToRefreshState,
         modifier = Modifier.fillMaxSize()
     ) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            item {
-                Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-                Spacer(Modifier.height(16.dp))
-                
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Red,
-                        unfocusedBorderColor = Color.DarkGray,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                )
-            }
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            // ШАПКА (ФИКСИРОВАННАЯ)
+            Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+            Spacer(Modifier.height(16.dp))
+            
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Red,
+                    unfocusedBorderColor = Color.DarkGray,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            )
 
-            items(displayedArtists, key = { it }) { artistName ->
-                val group = grouped[artistName]
-                val trackCount = group?.tracks?.size ?: 0
-                val posterUri = group?.posterUri
-                
-                Row(
-                    Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(Color(0xFF222222)),
-                        contentAlignment = Alignment.Center
+            // СПИСОК
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                items(displayedArtists, key = { it }) { artistName ->
+                    val group = grouped[artistName]
+                    val trackCount = group?.tracks?.size ?: 0
+                    val posterUri = group?.posterUri
+                    
+                    Row(
+                        Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (posterUri != null) {
-                            AsyncImage(
-                                model = posterUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Text(
-                                text = artistName.take(1).uppercase(),
-                                color = Color.Gray,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(Color(0xFF222222)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (posterUri != null) {
+                                AsyncImage(
+                                    model = posterUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = artistName.take(1).uppercase(),
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
+                        Spacer(Modifier.width(12.dp))
+                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                 }
-                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
             }
         }
     }
