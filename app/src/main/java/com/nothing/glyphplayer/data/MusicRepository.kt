@@ -20,7 +20,6 @@ class MusicRepository(
     val tracks: Flow<List<Track>> = db.tracks().observeAll()
     val playlists: Flow<List<Playlist>> = db.playlists().observeAll()
 
-    // Папка приложения — с проверкой старых имен
     val appFolder: File by lazy {
         val base = File(Environment.getExternalStorageDirectory(), "Music")
         if (!base.exists()) base.mkdirs()
@@ -33,18 +32,29 @@ class MusicRepository(
         File(appFolder, "lyrics").apply { mkdirs() }
     }
 
+    // Извлекаем albumId из artUri (для кэша валидации)
+    private fun extractAlbumIdFromArtUri(uri: String?): Long? {
+        if (uri.isNullOrBlank()) return null
+        return try {
+            uri.substringAfterLast("/").toLongOrNull()?.takeIf { it > 0 }
+        } catch (_: Exception) { null }
+    }
+
     suspend fun scanLibrary(): Int = withContext(Dispatchers.IO) {
-        val found = scanner.scan()
         val existing = db.tracks().all().associateBy { it.id }
 
-        // Счетчик для новых треков (чтобы у каждого была уникальная дата добавления)
-        var timestamp = System.currentTimeMillis()
+        // Кэш валидных альбомов — пропускаем повторную валидацию (ускоряет сканирование)
+        val knownValidAlbums = existing.values
+            .mapNotNull { extractAlbumIdFromArtUri(it.artUri) }
+            .toSet()
 
+        val found = scanner.scan(knownValidAlbums)
+
+        var timestamp = System.currentTimeMillis()
         val merged = found.map { newTrack ->
             val oldTrack = existing[newTrack.id]
             when {
                 oldTrack != null -> {
-                    // Существующий трек: сохраняем переименование и дату первого появления в библиотеке
                     val preservedDate = if (oldTrack.dateAdded > 0) oldTrack.dateAdded else (timestamp++)
                     newTrack.copy(
                         title = if (oldTrack.title != newTrack.title) oldTrack.title else newTrack.title,
@@ -53,7 +63,6 @@ class MusicRepository(
                 }
                 newTrack.dateAdded > 0 -> newTrack
                 else -> {
-                    // Нет даты от MediaStore — ставим дату добавления в библиотеку
                     timestamp += 1000L
                     newTrack.copy(dateAdded = timestamp)
                 }
@@ -121,15 +130,12 @@ class MusicRepository(
 
     suspend fun getSourceFolders(): Map<String, Int> = scanner.getSourceFolders()
 
-    // === ЛИРИКА ===
-
     suspend fun getLyrics(trackId: Long): String? = db.lyrics().getLyrics(trackId)
 
     suspend fun saveLyrics(trackId: Long, text: String) {
         db.lyrics().saveLyrics(LyricsEntity(trackId, text))
     }
 
-    // Загрузка .lrc текста (файл рядом с аудио → файл в папке app → null)
     suspend fun loadLrcText(trackId: Long, trackUri: String): String? = withContext(Dispatchers.IO) {
         try {
             val audioPath = scanner.getTrackPath(trackUri)
@@ -148,13 +154,11 @@ class MusicRepository(
         } catch (_: Exception) { null }
     }
 
-    // Парсинг .lrc (для караоке-режима)
     suspend fun loadLrcLines(trackId: Long, trackUri: String): List<LyricLine> {
         val text = loadLrcText(trackId, trackUri) ?: return emptyList()
         return LyricsLoader.parse(text)
     }
 
-    // Сохранение .lrc (файл рядом с аудио → резервная папка)
     suspend fun saveLrc(track: Track, text: String) = withContext(Dispatchers.IO) {
         try {
             val audioPath = scanner.getTrackPath(track.uri)
@@ -168,9 +172,7 @@ class MusicRepository(
                         lrcFile.writeText(text)
                     }
                     return@withContext
-                } catch (_: Exception) {
-                    // Права или read-only — падаем в резерв
-                }
+                } catch (_: Exception) { }
             }
             val fallbackFile = File(lyricsFallbackFolder, "${track.id}.lrc")
             if (text.isBlank()) {
