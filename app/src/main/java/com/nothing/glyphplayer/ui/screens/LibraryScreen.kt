@@ -17,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     vm: PlayerViewModel = viewModel(), 
@@ -72,10 +74,11 @@ fun LibraryScreen(
     var showCreateFromAdd by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     
+    val pullToRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Слушаем событие двойного тапа по вкладке Библиотека
+    // Бонус: двойной тап по иконке «Библиотека» в навигации
     LaunchedEffect(Unit) {
         vm.libraryRefreshEvent.collect {
             val wasAtTop = !listState.canScrollBackward
@@ -110,143 +113,167 @@ fun LibraryScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            stickyHeader {
-                Column(Modifier.fillMaxWidth().background(Color.Black)) {
-                    if (selectedTracks.isNotEmpty()) {
-                        Row(
-                            Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(horizontal = 12.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("${selectedTracks.size}", color = Color.White, fontWeight = FontWeight.Bold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { vm.playNext(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }, contentPadding = PaddingValues(4.dp)) { 
-                                    Text("Следующими", color = Red, style = MaterialTheme.typography.labelSmall) 
-                                }
-                                TextButton(onClick = { vm.addToQueue(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }, contentPadding = PaddingValues(4.dp)) { 
-                                    Text("В очередь", color = Red, style = MaterialTheme.typography.labelSmall) 
-                                }
-                                TextButton(onClick = { showAddToPlaylist = true }, contentPadding = PaddingValues(4.dp)) { 
-                                    Text("В плейлист", color = Red, style = MaterialTheme.typography.labelSmall) 
-                                }
-                                IconButton(onClick = { selectedTracks = emptyList() }) { Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray) }
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                sortMode = 3
+                isShuffled = false
+                search = ""
+                vm.scanLibrary { 
+                    isRefreshing = false 
+                    scope.launch { listState.animateScrollToItem(0) }
+                }
+            },
+            state = pullToRefreshState,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                // ================ ШАПКА (фиксированная, вне LazyColumn) ================
+                if (selectedTracks.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${selectedTracks.size}", color = Color.White, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { vm.playNext(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }, contentPadding = PaddingValues(4.dp)) { 
+                                Text("Следующими", color = Red, style = MaterialTheme.typography.labelSmall) 
+                            }
+                            TextButton(onClick = { vm.addToQueue(selectedTracks.mapNotNull { id -> lib.find { it.id == id } }); selectedTracks = emptyList() }, contentPadding = PaddingValues(4.dp)) { 
+                                Text("В очередь", color = Red, style = MaterialTheme.typography.labelSmall) 
+                            }
+                            TextButton(onClick = { showAddToPlaylist = true }, contentPadding = PaddingValues(4.dp)) { 
+                                Text("В плейлист", color = Red, style = MaterialTheme.typography.labelSmall) 
+                            }
+                            IconButton(onClick = { selectedTracks = emptyList() }) { 
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray) 
                             }
                         }
-                    } else {
-                        Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                            OutlinedTextField(
-                                value = search, onValueChange = { search = it }, placeholder = { Text(stringResource(R.string.lib_search_hint), color = Color.Gray) },
-                                singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
-                                modifier = Modifier.fillMaxWidth()
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = search, 
+                            onValueChange = { search = it }, 
+                            placeholder = { Text(stringResource(R.string.lib_search_hint), color = Color.Gray) },
+                            singleLine = true, 
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Red, 
+                                unfocusedBorderColor = Color.DarkGray, 
+                                focusedTextColor = Color.White, 
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth().padding(8.dp)
+                        )
+                        
+                        Box(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            TextButton(
+                                onClick = { 
+                                    isShuffled = true
+                                    shuffleOrder = lib.map { it.id }.shuffled()
+                                },
+                                modifier = Modifier.align(Alignment.CenterStart),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) { 
+                                Icon(Icons.Default.Shuffle, contentDescription = null, tint = Red, modifier = Modifier.size(24.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.lib_shuffle), color = Red, style = MaterialTheme.typography.bodyMedium) 
+                            }
+                            
+                            Text(
+                                text = if (search.isBlank()) "${filtered.size} треков" else "${filtered.size} из ${lib.size}",
+                                color = Color(0xFF6A6A6A),
+                                style = MaterialTheme.typography.labelSmall
                             )
                             
-                            Box(
-                                Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box(Modifier.align(Alignment.CenterEnd)) {
                                 TextButton(
-                                    onClick = { 
-                                        isShuffled = true
-                                        shuffleOrder = lib.map { it.id }.shuffled()
-                                    },
-                                    modifier = Modifier.align(Alignment.CenterStart),
+                                    onClick = { showSortMenu = true },
                                     contentPadding = PaddingValues(horizontal = 4.dp)
-                                ) { 
-                                    Icon(Icons.Default.Shuffle, contentDescription = null, tint = Red, modifier = Modifier.size(24.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.lib_shuffle), color = Red, style = MaterialTheme.typography.bodyMedium) 
-                                }
-                                
-                                Text(
-                                    text = if (search.isBlank()) "${filtered.size} треков" else "${filtered.size} из ${lib.size}",
-                                    color = Color(0xFF6A6A6A),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                
-                                Box(Modifier.align(Alignment.CenterEnd)) {
-                                    TextButton(
-                                        onClick = { showSortMenu = true },
-                                        contentPadding = PaddingValues(horizontal = 4.dp)
-                                    ) { Text("${stringResource(R.string.lib_sort)} ▼", color = Red) }
-                                    DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }, containerColor = Color(0xFF1E1E1E)) {
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_date_newest), color = Color.White) }, onClick = { sortMode = 3; isShuffled = false; showSortMenu = false })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_default), color = Color.White) }, onClick = { sortMode = 0; isShuffled = false; showSortMenu = false })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_title), color = Color.White) }, onClick = { sortMode = 1; isShuffled = false; showSortMenu = false })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_artist), color = Color.White) }, onClick = { sortMode = 2; isShuffled = false; showSortMenu = false })
-                                    }
+                                ) { Text("${stringResource(R.string.lib_sort)} ▼", color = Red) }
+                                DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }, containerColor = Color(0xFF1E1E1E)) {
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_date_newest), color = Color.White) }, onClick = { sortMode = 3; isShuffled = false; showSortMenu = false })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_default), color = Color.White) }, onClick = { sortMode = 0; isShuffled = false; showSortMenu = false })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_title), color = Color.White) }, onClick = { sortMode = 1; isShuffled = false; showSortMenu = false })
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_artist), color = Color.White) }, onClick = { sortMode = 2; isShuffled = false; showSortMenu = false })
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            if (isRefreshing || isScanning) {
-                item {
+                // ================ СПИСОК ================
+                if (isScanning) {
                     Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = Red)
                             Spacer(Modifier.height(8.dp))
-                            Text("Обновление библиотеки...", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+                            Text("Сканирование библиотеки...", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                }
-            } else {
-                itemsIndexed(filtered, key = { _, track -> track.id }) { idx, track ->
-                    val isSelected = selectedTracks.contains(track.id)
-                    Row(
-                        Modifier.fillMaxWidth().background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
-                            .combinedClickable(
-                                onClick = {
-                                    if (selectedTracks.isEmpty()) { 
-                                        if (state.currentTrackId == track.id) onTrackClick()
-                                        else { vm.playTracks(filtered, idx, "Мои треки"); onTrackClick() }
-                                    } else { 
-                                        selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
-                                    }
-                                },
-                                onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
-                            ).padding(12.dp), verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = trackPosters[track.id],
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                placeholder = painterResource(id = R.drawable.ic_fallback_music),
-                                error = painterResource(id = R.drawable.ic_fallback_music)
-                            )
-                        }
-                        
-                        Spacer(Modifier.width(12.dp))
+                } else {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        itemsIndexed(filtered, key = { _, track -> track.id }) { idx, track ->
+                            val isSelected = selectedTracks.contains(track.id)
+                            Row(
+                                Modifier.fillMaxWidth().background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (selectedTracks.isEmpty()) { 
+                                                if (state.currentTrackId == track.id) onTrackClick()
+                                                else { vm.playTracks(filtered, idx, "Мои треки"); onTrackClick() }
+                                            } else { 
+                                                selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
+                                            }
+                                        },
+                                        onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
+                                    ).padding(12.dp), verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Surface),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AsyncImage(
+                                        model = trackPosters[track.id],
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                        placeholder = painterResource(id = R.drawable.ic_fallback_music),
+                                        error = painterResource(id = R.drawable.ic_fallback_music)
+                                    )
+                                }
+                                
+                                Spacer(Modifier.width(12.dp))
 
-                        Column(Modifier.weight(1f)) {
-                            Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                            Text("${track.artist} • ${track.album}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                        }
-                        if (isSelected) Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall)
-                        else {
-                            Box {
-                                TextButton(onClick = { showMenuForTrack = track }) { Text("⋮", color = Color.Gray, style = MaterialTheme.typography.titleLarge) }
-                                DropdownMenu(expanded = showMenuForTrack?.id == track.id, onDismissRequest = { showMenuForTrack = null }, containerColor = Color(0xFF1E1E1E)) {
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = { vm.playNext(listOf(track)); showMenuForTrack = null })
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
-                                        showMenuForTrack = null
-                                        selectedTracks = listOf(track.id)
-                                        showAddToPlaylist = true
-                                    })
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = { trackToRename = track; showMenuForTrack = null })
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = { trackToDelete = track; showMenuForTrack = null })
+                                Column(Modifier.weight(1f)) {
+                                    Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                                    Text("${track.artist} • ${track.album}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                }
+                                if (isSelected) Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall)
+                                else {
+                                    Box {
+                                        TextButton(onClick = { showMenuForTrack = track }) { Text("⋮", color = Color.Gray, style = MaterialTheme.typography.titleLarge) }
+                                        DropdownMenu(expanded = showMenuForTrack?.id == track.id, onDismissRequest = { showMenuForTrack = null }, containerColor = Color(0xFF1E1E1E)) {
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = { vm.playNext(listOf(track)); showMenuForTrack = null })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
+                                                showMenuForTrack = null
+                                                selectedTracks = listOf(track.id)
+                                                showAddToPlaylist = true
+                                            })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = { trackToRename = track; showMenuForTrack = null })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = { trackToDelete = track; showMenuForTrack = null })
+                                        }
+                                    }
                                 }
                             }
+                            HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                         }
                     }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
                 }
             }
         }
