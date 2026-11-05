@@ -14,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,9 +31,8 @@ import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
-import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ArtistsScreen(
     vm: PlayerViewModel = viewModel(), 
@@ -47,11 +44,22 @@ fun ArtistsScreen(
     val selectedArtist by vm.selectedArtist.collectAsState()
     
     var searchQuery by remember { mutableStateOf("") }
-    
     var isRefreshing by remember { mutableStateOf(false) }
-    val pullToRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
+
+    // Слушаем событие двойного тапа по вкладке Исполнители
+    LaunchedEffect(Unit) {
+        vm.artistsRefreshEvent.collect {
+            val wasAtTop = !listState.canScrollBackward
+            if (!wasAtTop) {
+                listState.animateScrollToItem(0)
+            } else {
+                isRefreshing = true
+                searchQuery = ""
+                vm.scanLibrary { isRefreshing = false }
+            }
+        }
+    }
 
     val displayedArtists = remember(grouped, searchQuery) {
         val query = searchQuery.trim().lowercase()
@@ -79,41 +87,35 @@ fun ArtistsScreen(
         return
     }
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            searchQuery = ""
-            vm.scanLibrary { 
-                isRefreshing = false 
-                scope.launch { listState.animateScrollToItem(0) }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        stickyHeader {
+            Column(Modifier.fillMaxWidth().background(Color.Black).padding(16.dp)) {
+                Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                Spacer(Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Red,
+                        unfocusedBorderColor = Color.DarkGray,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-        },
-        state = pullToRefreshState,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            stickyHeader {
-                Column(Modifier.fillMaxWidth().background(Color.Black).padding(16.dp)) {
-                    Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-                    Spacer(Modifier.height(16.dp))
-                    
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Red,
-                            unfocusedBorderColor = Color.DarkGray,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+        }
+
+        if (isRefreshing) {
+            item {
+                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Red)
                 }
             }
-
+        } else {
             items(displayedArtists, key = { it }) { artistName ->
                 val group = grouped[artistName]
                 val trackCount = group?.tracks?.size ?: 0
