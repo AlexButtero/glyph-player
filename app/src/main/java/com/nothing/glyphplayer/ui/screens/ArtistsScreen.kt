@@ -181,7 +181,16 @@ fun ArtistTracksScreen(
     val playlists by vm.playlists.collectAsState()
     
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-        detectHorizontalDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onHorizontalDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
+        detectHorizontalDragGestures(
+            onDragEnd = { 
+                if (dragOffsetX > 150f) onBack()
+                dragOffsetX = 0f 
+            }, 
+            onHorizontalDrag = { change, dragAmount -> 
+                change.consume()
+                dragOffsetX += dragAmount 
+            }
+        )
     }) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().padding(16.dp)) {
