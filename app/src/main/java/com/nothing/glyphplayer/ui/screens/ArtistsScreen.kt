@@ -3,11 +3,12 @@ package com.nothing.glyphplayer.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,7 +54,6 @@ fun ArtistsScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Бонус: двойной тап по иконке «Исполнители»
     LaunchedEffect(Unit) {
         vm.artistsRefreshEvent.collect {
             val wasAtTop = !listState.canScrollBackward
@@ -107,7 +107,6 @@ fun ArtistsScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            // ================ ШАПКА (фиксированная) ================
             Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
             
@@ -125,55 +124,74 @@ fun ArtistsScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
             )
 
-            // ================ СПИСОК ================
             if (isRefreshing) {
                 Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Red)
                 }
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                    items(displayedArtists, key = { it }) { artistName ->
+                    items(
+                        items = displayedArtists,
+                        key = { it },
+                        contentType = { "artist" }
+                    ) { artistName ->
                         val group = grouped[artistName]
-                        val trackCount = group?.tracks?.size ?: 0
-                        val posterUri = group?.posterUri
-                        
-                        Row(
-                            Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .background(Color(0xFF222222)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (posterUri != null) {
-                                    AsyncImage(
-                                        model = posterUri,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    Text(
-                                        text = artistName.take(1).uppercase(),
-                                        color = Color.Gray,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                        }
-                        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                        ArtistRow(
+                            artistName = artistName,
+                            trackCount = group?.tracks?.size ?: 0,
+                            posterUri = group?.posterUri,
+                            onClick = { vm.selectArtist(artistName) }
+                        )
                     }
                 }
             }
         }
     }
+}
+
+// === ОПТИМИЗИРОВАННАЯ СТРОКА ИСПОЛНИТЕЛЯ ===
+@Composable
+private fun ArtistRow(
+    artistName: String,
+    trackCount: Int,
+    posterUri: String?,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF222222)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (posterUri != null) {
+                AsyncImage(
+                    model = posterUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = artistName.take(1).uppercase(),
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+    }
+    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -250,67 +268,39 @@ fun ArtistTracksScreen(
                 }
                 
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(tracks, key = { it.id }) { track ->
+                    itemsIndexed(
+                        items = tracks,
+                        key = { _, track -> track.id },
+                        contentType = { _, _ -> "track" }
+                    ) { idx, track ->
                         val isSelected = selectedTracks.contains(track.id)
                         
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
-                                .combinedClickable(
-                                    onClick = {
-                                        if (selectedTracks.isEmpty()) { 
-                                            vm.playTracks(tracks, tracks.indexOf(track), artistName)
-                                            onTrackClick() 
-                                        } else { 
-                                            selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
-                                        }
-                                    },
-                                    onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id }
-                                )
-                                .padding(vertical = 8.dp), 
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF222222)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val poster = trackPosters[track.id]
-                                if (poster != null) {
-                                    AsyncImage(
-                                        model = poster,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                        error = painterResource(id = R.drawable.ic_fallback_music),
-                                        placeholder = painterResource(id = R.drawable.ic_fallback_music)
-                                    )
-                                } else {
-                                    Text(track.title.take(1).uppercase(), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        ArtistTrackRow(
+                            track = track,
+                            posterUri = trackPosters[track.id],
+                            isSelected = isSelected,
+                            onClick = {
+                                if (selectedTracks.isEmpty()) { 
+                                    vm.playTracks(tracks, idx, artistName)
+                                    onTrackClick() 
+                                } else { 
+                                    selectedTracks = if (isSelected) selectedTracks - track.id else selectedTracks + track.id 
                                 }
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            
-                            if (isSelected) {
-                                Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(end = 12.dp))
-                            } else {
-                                Box {
-                                    TextButton(onClick = { showMenuForTrack = track }) { Text("⋮", color = Color.Gray, style = MaterialTheme.typography.titleLarge) }
-                                    DropdownMenu(expanded = showMenuForTrack?.id == track.id, onDismissRequest = { showMenuForTrack = null }, containerColor = Color(0xFF1E1E1E)) {
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = { vm.playNext(listOf(track)); showMenuForTrack = null })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = { vm.addToQueue(listOf(track)); showMenuForTrack = null })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = { 
-                                            trackForPlaylist = track
-                                            showMenuForTrack = null
-                                            showAddToPlaylist = true 
-                                        })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = { trackToRename = track; showMenuForTrack = null })
-                                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = { trackToDelete = track; showMenuForTrack = null })
-                                    }
-                                }
-                            }
-                        }
-                        HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                            },
+                            onLongClick = { if (!isSelected) selectedTracks = selectedTracks + track.id },
+                            onMenuClick = { showMenuForTrack = track },
+                            showMenu = showMenuForTrack?.id == track.id,
+                            onMenuDismiss = { showMenuForTrack = null },
+                            onPlayNext = { vm.playNext(listOf(track)); showMenuForTrack = null },
+                            onAddToQueue = { vm.addToQueue(listOf(track)); showMenuForTrack = null },
+                            onAddToPlaylist = { 
+                                trackForPlaylist = track
+                                showAddToPlaylist = true 
+                                showMenuForTrack = null 
+                            },
+                            onRename = { trackToRename = track; showMenuForTrack = null },
+                            onDelete = { trackToDelete = track; showMenuForTrack = null }
+                        )
                     }
                 }
             }
@@ -392,4 +382,83 @@ fun ArtistTracksScreen(
             dismissButton = { TextButton(onClick = { trackToRename = null }) { Text(stringResource(R.string.lib_cancel), color = Color.Gray) } }, containerColor = Color(0xFF121212)
         )
     }
+}
+
+// === ОПТИМИЗИРОВАННАЯ СТРОКА ТРЕКА ВНУТРИ АРТИСТА ===
+@Composable
+private fun ArtistTrackRow(
+    track: Track,
+    posterUri: String?,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onMenuClick: () -> Unit,
+    showMenu: Boolean,
+    onMenuDismiss: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (isSelected) Red.copy(alpha = 0.2f) else Color.Transparent)
+            .pointerInput(track.id) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { onLongClick() }
+                )
+            }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF222222)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (posterUri != null) {
+                AsyncImage(
+                    model = posterUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = painterResource(id = R.drawable.ic_fallback_music),
+                    placeholder = painterResource(id = R.drawable.ic_fallback_music)
+                )
+            } else {
+                Text(track.title.take(1).uppercase(), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(track.title, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        
+        if (isSelected) {
+            Text("✓", color = Red, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(end = 12.dp))
+        } else {
+            Box {
+                Box(
+                    Modifier.size(36.dp).clickable(onClick = onMenuClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("⋮", color = Color.Gray, style = MaterialTheme.typography.titleLarge)
+                }
+                if (showMenu) {
+                    DropdownMenu(
+                        expanded = true,
+                        onDismissRequest = onMenuDismiss,
+                        containerColor = Color(0xFF1E1E1E)
+                    ) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_play_next), color = Color.White) }, onClick = onPlayNext)
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_queue), color = Color.White) }, onClick = onAddToQueue)
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_add_to_playlist), color = Color.White) }, onClick = onAddToPlaylist)
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename), color = Color.White) }, onClick = onRename)
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete), color = Red) }, onClick = onDelete)
+                    }
+                }
+            }
+        }
+    }
+    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
 }
