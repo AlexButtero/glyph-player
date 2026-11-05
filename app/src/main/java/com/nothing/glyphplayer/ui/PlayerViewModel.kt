@@ -244,10 +244,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _lyrics = MutableStateFlow<List<LyricLine>>(emptyList())
     val lyrics: StateFlow<List<LyricLine>> = _lyrics
 
-    private val _lyricsOffsetMs = MutableStateFlow(0L)
+    private val _lyricsOffsetMs = MutableStateFlow(-200L)
     val lyricsOffsetMs: StateFlow<Long> = _lyricsOffsetMs
 
-    private val _isWhiteLyrics = MutableStateFlow(prefs.getBoolean("is_white_lyrics", false))
+    private val _isWhiteLyrics = MutableStateFlow(prefs.getBoolean("is_white_lyrics", true))
     val isWhiteLyrics: StateFlow<Boolean> = _isWhiteLyrics
 
     private val _isScanning = MutableStateFlow(false)
@@ -329,7 +329,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val newId = _state.value.currentTrackId
             if (newId != null && newId != currentLyricsTrackId) {
                 currentLyricsTrackId = newId
-                _lyricsOffsetMs.value = prefs.getLong("lyrics_offset_$newId", 0L)
+                _lyricsOffsetMs.value = prefs.getLong("lyrics_offset_$newId", -200L)
                 val uri = library.value.find { it.id == newId }?.uri
                 if (uri != null) {
                     scope.launch { _lyrics.value = repo.loadLrcLines(newId, uri) }
@@ -578,7 +578,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         scope.launch { val tracks = repo.tracksOf(playlistId); withContext(Dispatchers.Main) { onResult(tracks) } }
     }
 
-    // Приоритет: .lrc файл → БД (с автосинхронизацией)
     fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) {
         scope.launch {
             val track = library.value.find { it.id == trackId }
@@ -593,7 +592,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Сохраняем в БД + .lrc файл
     fun saveLyrics(trackId: Long, text: String) {
         scope.launch {
             repo.saveLyrics(trackId, text)
