@@ -23,7 +23,9 @@ import com.nothing.glyphplayer.playback.PlayerService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -223,6 +225,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
     .flowOn(Dispatchers.Default)
     .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
+    // === СОБЫТИЯ ОБНОВЛЕНИЯ (для двойного тапа по навигации) ===
+    private val _libraryRefreshEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val libraryRefreshEvent: SharedFlow<Unit> = _libraryRefreshEvent
+
+    private val _artistsRefreshEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val artistsRefreshEvent: SharedFlow<Unit> = _artistsRefreshEvent
+
+    fun triggerLibraryRefresh() { scope.launch { _libraryRefreshEvent.emit(Unit) } }
+    fun triggerArtistsRefresh() { scope.launch { _artistsRefreshEvent.emit(Unit) } }
 
     private val _selectedArtist = MutableStateFlow<String?>(null)
     val selectedArtist: StateFlow<String?> = _selectedArtist
