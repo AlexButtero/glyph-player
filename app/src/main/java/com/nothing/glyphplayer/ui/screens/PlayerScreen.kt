@@ -111,11 +111,24 @@ fun PlayerScreen(
         KaraokeLyricsScreen(vm, state.currentTrackId, effectivePosition, isWhiteLyrics, onBack = { showLyrics = false }); return 
     }
     if (showQueue) { 
+        // Очередь: если включен shuffle, показываем displayQueue (перемешанный). 
+        // Иначе показываем обычный queue.
+        val displayList = if (state.shuffle) state.displayQueue else state.queue
+        val uiCurrentIndex = displayList.indexOfFirst { it.mediaId == state.currentTrackId?.toString() }.coerceAtLeast(0)
+        
         QueueScreen(
-            queue = state.queue,
-            currentIndex = state.currentIndex,
+            queue = displayList,
+            currentIndex = uiCurrentIndex,
             onBack = { showQueue = false },
-            onSelect = { realIndex -> vm.seekToIndex(realIndex); showQueue = false }
+            onSelect = { displayIndex ->
+                val item = displayList.getOrNull(displayIndex)
+                if (item != null) {
+                    // Находим реальный индекс в оригинальном списке
+                    val originalIndex = state.queue.indexOfFirst { it.mediaId == item.mediaId }
+                    if (originalIndex != -1) vm.seekToIndex(originalIndex)
+                }
+                showQueue = false
+            }
         ); return 
     }
 
@@ -694,7 +707,6 @@ fun KaraokeLyricsScreen(
 @Composable
 fun QueueScreen(queue: List<MediaItem>, currentIndex: Int, onBack: () -> Unit, onSelect: (Int) -> Unit) {
     var dragOffsetX by remember { mutableStateOf(0f) }
-    // Инициализируем список на текущем треке. Пользователь может скроллить вверх и вниз.
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
