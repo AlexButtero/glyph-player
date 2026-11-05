@@ -31,7 +31,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
-import com.nothing.glyphplayer.ui.ArtistGroup
 import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.launch
@@ -44,7 +43,7 @@ fun ArtistsScreen(
     onTrackClick: () -> Unit
 ) {
     val lib by vm.library.collectAsState()
-    val grouped by vm.artistGroups.collectAsState() // Мгновенная загрузка из кэша VM
+    val grouped by vm.artistGroups.collectAsState()
     val selectedArtist by vm.selectedArtist.collectAsState()
     
     var searchQuery by remember { mutableStateOf("") }
@@ -73,7 +72,6 @@ fun ArtistsScreen(
                 onTrackClick = onTrackClick
             )
         } else {
-            // Данные еще не подъехали
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Red)
             }
@@ -94,63 +92,63 @@ fun ArtistsScreen(
         state = pullToRefreshState,
         modifier = Modifier.fillMaxSize()
     ) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Spacer(Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Red,
-                    unfocusedBorderColor = Color.DarkGray,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                ),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-            )
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            item {
+                Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                Spacer(Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Red,
+                        unfocusedBorderColor = Color.DarkGray,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                )
+            }
 
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                items(displayedArtists, key = { it }) { artistName ->
-                    val group = grouped[artistName]
-                    val trackCount = group?.tracks?.size ?: 0
-                    val posterUri = group?.posterUri
-                    
-                    Row(
-                        Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            items(displayedArtists, key = { it }) { artistName ->
+                val group = grouped[artistName]
+                val trackCount = group?.tracks?.size ?: 0
+                val posterUri = group?.posterUri
+                
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Color(0xFF222222)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(Color(0xFF222222)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (posterUri != null) {
-                                AsyncImage(
-                                    model = posterUri,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = artistName.take(1).uppercase(),
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                        if (posterUri != null) {
+                            AsyncImage(
+                                model = posterUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = artistName.take(1).uppercase(),
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                     }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                    Spacer(Modifier.width(12.dp))
+                    Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 }
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
             }
         }
     }
