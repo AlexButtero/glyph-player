@@ -140,17 +140,36 @@ fun LibraryScreen(
                         singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Red, unfocusedBorderColor = Color.DarkGray, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
                         modifier = Modifier.fillMaxWidth().padding(8.dp)
                     )
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { 
-                            isShuffled = true
-                            shuffleOrder = lib.map { it.id }.shuffled()
-                        }) { 
+                    
+                    Box(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        TextButton(
+                            onClick = { 
+                                isShuffled = true
+                                shuffleOrder = lib.map { it.id }.shuffled()
+                            },
+                            modifier = Modifier.align(Alignment.CenterStart),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) { 
                             Icon(Icons.Default.Shuffle, contentDescription = null, tint = Red, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.lib_shuffle), color = Red, style = MaterialTheme.typography.bodyMedium) 
                         }
-                        Box {
-                            TextButton(onClick = { showSortMenu = true }) { Text("${stringResource(R.string.lib_sort)} ▼", color = Red) }
+                        
+                        // СЧЕТЧИК ТРЕКОВ (лаконично, по центру)
+                        Text(
+                            text = if (search.isBlank()) "${filtered.size} треков" else "${filtered.size} из ${lib.size}",
+                            color = Color(0xFF6A6A6A),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        
+                        Box(Modifier.align(Alignment.CenterEnd)) {
+                            TextButton(
+                                onClick = { showSortMenu = true },
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) { Text("${stringResource(R.string.lib_sort)} ▼", color = Red) }
                             DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }, containerColor = Color(0xFF1E1E1E)) {
                                 DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_date_newest), color = Color.White) }, onClick = { sortMode = 3; isShuffled = false; showSortMenu = false })
                                 DropdownMenuItem(text = { Text(stringResource(R.string.lib_sort_default), color = Color.White) }, onClick = { sortMode = 0; isShuffled = false; showSortMenu = false })
