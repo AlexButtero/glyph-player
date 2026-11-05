@@ -20,7 +20,7 @@ import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 
 @Composable
-fun SettingsScreen(vm: PlayerViewModel = viewModel()) {
+fun SettingsScreen(vm: PlayerViewModel = viewModel(), onOpenSources: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     var eqOn by remember { mutableStateOf(EqualizerManager.isEnabled()) }
     var showLang by remember { mutableStateOf(false) }
@@ -38,6 +38,15 @@ fun SettingsScreen(vm: PlayerViewModel = viewModel()) {
 
         SectionTitle(stringResource(R.string.settings_library))
         Button(onClick = { vm.scanLibrary { } }, colors = ButtonDefaults.buttonColors(containerColor = Red), modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_rescan)) }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth().clickable { onOpenSources() }.padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Источники музыки", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            Text("›", color = Red, style = MaterialTheme.typography.headlineSmall)
+        }
 
         Spacer(Modifier.height(16.dp))
         SectionTitle(stringResource(R.string.settings_audio))
