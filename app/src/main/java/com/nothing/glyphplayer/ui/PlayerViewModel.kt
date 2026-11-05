@@ -19,7 +19,6 @@ import com.nothing.glyphplayer.GlyphPlayerApp
 import com.nothing.glyphplayer.data.Playlist
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.playback.LyricLine
-import com.nothing.glyphplayer.playback.LyricsLoader
 import com.nothing.glyphplayer.playback.PlayerService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -233,6 +232,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val selectedPlaylistId: StateFlow<Long?> = _selectedPlaylistId
     fun selectPlaylist(id: Long?) { _selectedPlaylistId.value = id }
 
+    private val _sourceFolders = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val sourceFolders: StateFlow<Map<String, Int>> = _sourceFolders
+
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state
 
@@ -327,13 +329,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val newId = _state.value.currentTrackId
             if (newId != null && newId != currentLyricsTrackId) {
                 currentLyricsTrackId = newId
-                
-                // ЗАГРУЗКА ЗАДЕРЖКИ ДЛЯ КОНКРЕТНОГО ТРЕКА
                 _lyricsOffsetMs.value = prefs.getLong("lyrics_offset_$newId", 0L)
-                
                 val uri = library.value.find { it.id == newId }?.uri
                 if (uri != null) {
-                    scope.launch { _lyrics.value = LyricsLoader.load(context, uri) }
+                    scope.launch { _lyrics.value = repo.loadLrcLines(newId, uri) }
                 } else {
                     _lyrics.value = emptyList()
                 }
@@ -547,6 +546,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun loadSourceFolders() {
+        scope.launch {
+            val folders = repo.getSourceFolders()
+            withContext(Dispatchers.Main) { _sourceFolders.value = folders }
+        }
+    }
+
     fun deleteTrack(track: Track) { scope.launch { repo.deleteTrack(track) } }
     fun renameTrack(track: Track, newTitle: String) { scope.launch { repo.renameTrack(track, newTitle) } }
 
@@ -572,8 +578,31 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         scope.launch { val tracks = repo.tracksOf(playlistId); withContext(Dispatchers.Main) { onResult(tracks) } }
     }
 
-    fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) { scope.launch { withContext(Dispatchers.Main) { onResult(repo.getLyrics(trackId)) } } }
-    fun saveLyrics(trackId: Long, text: String) { scope.launch { repo.saveLyrics(trackId, text) } }
+    // Приоритет: .lrc файл → БД (с автосинхронизацией)
+    fun getSavedLyrics(trackId: Long, onResult: (String?) -> Unit) {
+        scope.launch {
+            val track = library.value.find { it.id == trackId }
+            val fromFile = if (track != null) repo.loadLrcText(trackId, track.uri) else null
+            if (!fromFile.isNullOrBlank()) {
+                repo.saveLyrics(trackId, fromFile)
+                withContext(Dispatchers.Main) { onResult(fromFile) }
+            } else {
+                val fromDb = repo.getLyrics(trackId)
+                withContext(Dispatchers.Main) { onResult(fromDb) }
+            }
+        }
+    }
+
+    // Сохраняем в БД + .lrc файл
+    fun saveLyrics(trackId: Long, text: String) {
+        scope.launch {
+            repo.saveLyrics(trackId, text)
+            val track = library.value.find { it.id == trackId }
+            if (track != null) {
+                repo.saveLrc(track, text)
+            }
+        }
+    }
 
     override fun onCleared() {
         try {
