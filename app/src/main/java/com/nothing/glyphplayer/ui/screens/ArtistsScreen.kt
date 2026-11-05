@@ -4,7 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,7 +35,7 @@ import com.nothing.glyphplayer.ui.PlayerViewModel
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistsScreen(
     vm: PlayerViewModel = viewModel(), 
@@ -92,65 +92,65 @@ fun ArtistsScreen(
         state = pullToRefreshState,
         modifier = Modifier.fillMaxSize()
     ) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            // ШАПКА (ФИКСИРОВАННАЯ)
-            Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Spacer(Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Red,
-                    unfocusedBorderColor = Color.DarkGray,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                ),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-            )
-
-            // СПИСОК
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                items(displayedArtists, key = { it }) { artistName ->
-                    val group = grouped[artistName]
-                    val trackCount = group?.tracks?.size ?: 0
-                    val posterUri = group?.posterUri
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            stickyHeader {
+                Column(Modifier.fillMaxWidth().background(Color.Black).padding(16.dp)) {
+                    Text("ИСПОЛНИТЕЛИ", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                    Spacer(Modifier.height(16.dp))
                     
-                    Row(
-                        Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(Color(0xFF222222)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (posterUri != null) {
-                                AsyncImage(
-                                    model = posterUri,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = artistName.take(1).uppercase(),
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
-                    }
-                    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Поиск исполнителя...", color = Color.Gray) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Red,
+                            unfocusedBorderColor = Color.DarkGray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
+            }
+
+            items(displayedArtists, key = { it }) { artistName ->
+                val group = grouped[artistName]
+                val trackCount = group?.tracks?.size ?: 0
+                val posterUri = group?.posterUri
+                
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.selectArtist(artistName) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Color(0xFF222222)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (posterUri != null) {
+                            AsyncImage(
+                                model = posterUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = artistName.take(1).uppercase(),
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                }
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f), modifier = Modifier.padding(horizontal = 16.dp))
             }
         }
     }
@@ -181,7 +181,7 @@ fun ArtistTracksScreen(
     val playlists by vm.playlists.collectAsState()
     
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-        detectDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
+        detectHorizontalDragGestures(onDragEnd = { if (dragOffsetX > 150f) onBack(); dragOffsetX = 0f }, onHorizontalDrag = { change, dragAmount -> change.consume(); dragOffsetX += dragAmount.x })
     }) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().padding(16.dp)) {
