@@ -29,6 +29,7 @@ import com.nothing.glyphplayer.ui.screens.LibraryScreen
 import com.nothing.glyphplayer.ui.screens.PlayerScreen
 import com.nothing.glyphplayer.ui.screens.PlaylistsScreen
 import com.nothing.glyphplayer.ui.screens.SettingsScreen
+import com.nothing.glyphplayer.ui.screens.SourceFoldersScreen
 import com.nothing.glyphplayer.ui.theme.Red
 import kotlinx.coroutines.launch
 
@@ -77,11 +78,12 @@ fun GlyphApp() {
                             0 -> LibraryScreen(vm = vm, trackPosters = trackPosters, onTrackClick = { nav.navigate("PLAYER") })
                             1 -> ArtistsScreen(vm = vm, trackPosters = trackPosters, onTrackClick = { nav.navigate("PLAYER") })
                             2 -> PlaylistsScreen(vm = vm, trackPosters = trackPosters, onPlaylistClick = { nav.navigate("PLAYER") })
-                            3 -> SettingsScreen(vm = vm)
+                            3 -> SettingsScreen(vm = vm, onOpenSources = { nav.navigate("SOURCES") })
                         }
                     }
                 }
                 composable("PLAYER") { PlayerScreen(vm = vm, trackPosters = trackPosters, onBack = { nav.popBackStack() }) }
+                composable("SOURCES") { SourceFoldersScreen(vm = vm, onBack = { nav.popBackStack() }) }
             }
         }
     }
