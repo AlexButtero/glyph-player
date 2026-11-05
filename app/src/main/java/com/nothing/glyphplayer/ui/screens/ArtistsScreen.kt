@@ -21,15 +21,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.nothing.glyphplayer.R
 import com.nothing.glyphplayer.data.Track
 import com.nothing.glyphplayer.ui.PlayerViewModel
@@ -46,6 +50,7 @@ fun ArtistsScreen(
     val lib by vm.library.collectAsState()
     val grouped by vm.artistGroups.collectAsState()
     val selectedArtist by vm.selectedArtist.collectAsState()
+    val context = LocalContext.current
     
     var searchQuery by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -58,7 +63,7 @@ fun ArtistsScreen(
         vm.artistsRefreshEvent.collect {
             val wasAtTop = !listState.canScrollBackward
             if (!wasAtTop) {
-                listState.animateScrollToItem(0)
+                listState.scrollToItem(0)
             } else {
                 isRefreshing = true
                 searchQuery = ""
@@ -100,7 +105,7 @@ fun ArtistsScreen(
             searchQuery = ""
             vm.scanLibrary { 
                 isRefreshing = false 
-                scope.launch { listState.animateScrollToItem(0) }
+                scope.launch { listState.scrollToItem(0) }
             }
         },
         state = pullToRefreshState,
@@ -137,6 +142,7 @@ fun ArtistsScreen(
                     ) { artistName ->
                         val group = grouped[artistName]
                         ArtistRow(
+                            context = context,
                             artistName = artistName,
                             trackCount = group?.tracks?.size ?: 0,
                             posterUri = group?.posterUri,
@@ -149,9 +155,9 @@ fun ArtistsScreen(
     }
 }
 
-// === ОПТИМИЗИРОВАННАЯ СТРОКА ИСПОЛНИТЕЛЯ ===
 @Composable
 private fun ArtistRow(
+    context: android.content.Context,
     artistName: String,
     trackCount: Int,
     posterUri: String?,
@@ -161,6 +167,15 @@ private fun ArtistRow(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .drawBehind {
+                val y = size.height - 1f
+                drawLine(
+                    color = Color(0xFF444444).copy(alpha = 0.3f),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1f
+                )
+            }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -173,7 +188,10 @@ private fun ArtistRow(
         ) {
             if (posterUri != null) {
                 AsyncImage(
-                    model = posterUri,
+                    model = ImageRequest.Builder(context)
+                        .data(posterUri)
+                        .crossfade(false)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -191,7 +209,6 @@ private fun ArtistRow(
         Text(artistName, color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Text("$trackCount", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
     }
-    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -205,6 +222,7 @@ fun ArtistTracksScreen(
     onTrackClick: () -> Unit
 ) {
     var dragOffsetX by remember { mutableStateOf(0f) }
+    val context = LocalContext.current
     
     var showMenuForTrack by remember { mutableStateOf<Track?>(null) }
     var trackToDelete by remember { mutableStateOf<Track?>(null) }
@@ -276,6 +294,7 @@ fun ArtistTracksScreen(
                         val isSelected = selectedTracks.contains(track.id)
                         
                         ArtistTrackRow(
+                            context = context,
                             track = track,
                             posterUri = trackPosters[track.id],
                             isSelected = isSelected,
@@ -384,9 +403,9 @@ fun ArtistTracksScreen(
     }
 }
 
-// === ОПТИМИЗИРОВАННАЯ СТРОКА ТРЕКА ВНУТРИ АРТИСТА ===
 @Composable
 private fun ArtistTrackRow(
+    context: android.content.Context,
     track: Track,
     posterUri: String?,
     isSelected: Boolean,
@@ -411,6 +430,15 @@ private fun ArtistTrackRow(
                     onLongPress = { onLongClick() }
                 )
             }
+            .drawBehind {
+                val y = size.height - 1f
+                drawLine(
+                    color = Color(0xFF444444).copy(alpha = 0.3f),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1f
+                )
+            }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -420,7 +448,10 @@ private fun ArtistTrackRow(
         ) {
             if (posterUri != null) {
                 AsyncImage(
-                    model = posterUri,
+                    model = ImageRequest.Builder(context)
+                        .data(posterUri)
+                        .crossfade(false)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -460,5 +491,4 @@ private fun ArtistTrackRow(
             }
         }
     }
-    HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.3f))
 }
